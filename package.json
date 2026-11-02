@@ -1,0 +1,57 @@
+{
+  "name": "dsh-selfnote",
+  "version": "0.6.1",
+  "type": "module",
+  "description": "Self-narrative memory for DeepSeek Harness: the model writes notes to itself, which persist across sessions and are injected back. | 自我叙述库：模型写给自己看的话，跨会话保留并每回合注入。",
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "persona",
+    "memory",
+    "self-note"
+  ],
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node tests/smoke.mjs && node tests/memory.mjs && node tests/roles.mjs && node tests/index.mjs && node tests/api.mjs && node tests/client.mjs"
+  },
+  "engines": {
+    "node": ">=20.13.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "react": "^18.3.1"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xyzOvO/dsh-selfnote.git"
+  },
+  "homepage": "https://github.com/xyzOvO/dsh-selfnote#readme",
+  "bugs": {
+    "url": "https://github.com/xyzOvO/dsh-selfnote/issues"
+  },
+  "author": "xyzOvO"
+}

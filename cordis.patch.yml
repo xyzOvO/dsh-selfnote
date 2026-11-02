@@ -1,0 +1,4 @@
+# 插件清单：id 是补丁内的唯一标识，name 必须是包名（裸包名）。
+- insert:
+    - id: selfnote
+      name: dsh-selfnote

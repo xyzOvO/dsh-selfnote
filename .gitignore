@@ -1,0 +1,9 @@
+node_modules/
+*.tgz
+*.log
+.DS_Store
+
+# 本机配置与状态，不进仓库
+*.local.json
+memory/
+cache/
