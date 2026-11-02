@@ -10,6 +10,7 @@ import { join } from 'node:path'
 
 const dir = mkdtempSync(join(tmpdir(), 'selfnote-p1b-'))
 process.env.DSH_SELFNOTE_DIR = dir
+process.env.DSH_MEMORY_DIR = dir
 
 const capture = await import('../lib/capture.js')
 const run = await import('../lib/capture-run.js')
