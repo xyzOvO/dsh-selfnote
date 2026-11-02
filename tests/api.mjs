@@ -45,11 +45,13 @@ assert.deepEqual(toolNames, ['self_note', 'memory_recall', 'memory_stage'])
 assert.equal(toolHold[0].output.render({}, { action: 'stats', entries: 0, chars: 0, maxChars: 1, maxEntries: 1, archiveFiles: 0 })[0].type, 'text')
 assert.equal(toolHold[1].output.render({}, { query: 'x', raw: { total: 0 } })[0].type, 'text')
 
-function call(method, url, body) {
+function call(method, url, body, headers) {
   return new Promise((resolve, reject) => {
     const req = new EventEmitter()
     req.method = method
     req.url = url
+    // 默认带上准入头，专门测鉴权的用例再自己覆盖
+    req.headers = headers ?? { 'x-selfnote': '1' }
     const res = {
       status: 0,
       headers: null,
@@ -210,5 +212,36 @@ assert.equal(after.history[0].to, 'approved')
 assert.equal(after.history[0].from, 'candidate')
 assert.equal(after.history[0].via, 'settings')
 console.log('15. 采纳/退役留痕：时间、来源、前后状态')
-console.log('\n15 项全部通过（data dir: ' + dir + '）')
+
+/* 16. 没有准入头 → 403：别的网页不能直接读你全部记忆 */
+r = await call('GET', '/api/selfnote/state', undefined, {})
+assert.equal(r.status, 403)
+assert.equal(r.payload.ok, false)
+r = await call('POST', '/api/selfnote/fact', { id: 'audit1', status: 'retired' }, {})
+assert.equal(r.status, 403)
+assert.equal(JSON.parse(readFileSync(factsFile, 'utf8').trim()).status, 'approved', '被拒的写请求不该落盘')
+console.log('16. 没有 x-selfnote 头 → 403，且不落盘')
+
+/* 17. 跨站 Origin → 403，同源 → 放行 */
+r = await call('GET', '/api/selfnote/state', undefined, {
+  'x-selfnote': '1',
+  origin: 'http://evil.example',
+  host: '127.0.0.1:56645',
+})
+assert.equal(r.status, 403)
+r = await call('GET', '/api/selfnote/state', undefined, {
+  'x-selfnote': '1',
+  origin: 'http://127.0.0.1:56645',
+  host: '127.0.0.1:56645',
+})
+assert.equal(r.status, 200)
+console.log('17. 跨站 Origin → 403，同源 → 200')
+
+/* 18. 一条超长条目不该把整段预算挤空 */
+await call('POST', '/api/selfnote/note', { text: '长'.repeat(130) })
+await call('POST', '/api/selfnote/note', { text: '短的一条要留下' })
+assert.match(injectionDef.text(), /短的一条要留下/)
+assert.equal(injectionDef.text().includes('长'.repeat(20)), false, '放不进预算的条目要跳过，不是把后面的一起丢掉')
+console.log('18. 超长条目不再把整段挤空')
+console.log('\n18 项全部通过（data dir: ' + dir + '）')
 process.exit(0)

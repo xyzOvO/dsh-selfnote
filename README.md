@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/version-0.9.0-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
-  <img src="https://img.shields.io/badge/tests-119%20passed-0ea5e9" alt="tests">
+  <img src="https://img.shields.io/badge/tests-127%20passed-0ea5e9" alt="tests">
 </p>
 
 ---
@@ -195,14 +195,14 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 ## 开发
 
 ```bash
-node --run test     # 119 项，11 个文件，无外部依赖
+node --run test     # 127 项，12 个文件，无外部依赖
 ```
 
 | 文件 | 覆盖 |
 |---|---|
 | `tests/smoke.mjs` `tests/api.mjs` `tests/client.mjs` `tests/client-state.mjs` | 注册、写入、容量裁剪、归档、HTTP 路由、设置页渲染 |
 | `tests/memory.mjs` `tests/roles.mjs` `tests/index.mjs` | 检索分层、角色权重、倒排索引与过期判定 |
-| `tests/heat.mjs` `tests/profile.mjs` | 遗忘曲线边界、画像聚合与冲突计数 |
+| `tests/heat.mjs` `tests/facts-tx.mjs` `tests/profile.mjs` | 遗忘曲线边界、facts 写事务（并发不覆盖）、画像聚合与冲突计数 |
 | `tests/capture.mjs` `tests/capture-p1b.mjs` | 触发词、去重合并、游标幂等与崩溃恢复 |
 
 改 `lib/*.js` 或 `lib/client.js` 之后**必须重启 DSH**，热重载不会重新扫描 client bundle。测试会自动隔离 `DSH_MEMORY_DIR`，不会污染真实记忆。
