@@ -15,6 +15,8 @@ process.env.DSH_SELFNOTE_DIR = dir
 // 别碰真实的记忆目录与会话目录
 process.env.DSH_MEMORY_DIR = join(dir, 'memory')
 process.env.DSH_SESSIONS_DIR = join(dir, 'sessions')
+// 测试里不要去弹真实的资源管理器窗口
+process.env.DSH_SELFNOTE_NO_OPEN = '1'
 
 const { apply } = await import('../lib/index.js')
 
@@ -243,5 +245,37 @@ await call('POST', '/api/selfnote/note', { text: '短的一条要留下' })
 assert.match(injectionDef.text(), /短的一条要留下/)
 assert.equal(injectionDef.text().includes('长'.repeat(20)), false, '放不进预算的条目要跳过，不是把后面的一起丢掉')
 console.log('18. 超长条目不再把整段挤空')
-console.log('\n18 项全部通过（data dir: ' + dir + '）')
+
+/* 19. /state 带文件清单：只列和 AI 记忆有关的，带条数与字节 */
+r = await call('GET', '/api/selfnote/state')
+const files = r.payload.files
+assert.equal(Array.isArray(files), true)
+assert.deepEqual(files.map((item) => item.key), ['notes', 'facts', 'habits', 'config', 'cursor', 'index', 'archive'])
+for (const item of files) {
+  assert.equal(typeof item.label, 'string')
+  assert.equal(typeof item.path, 'string')
+  assert.equal(typeof item.count, 'string', item.key + ' 要给出可视化的条数说明')
+  assert.equal(typeof item.bytes, 'number')
+}
+const notesRow = files.find((item) => item.key === 'notes')
+assert.equal(notesRow.exists, true)
+assert.ok(notesRow.bytes > 0)
+assert.match(notesRow.path, /notes\.md$/)
+console.log('19. 文件清单：7 项、带条数/字节/路径')
+
+/* 20. 打开未知文件 → 400 */
+r = await call('POST', '/api/selfnote/open', { key: 'nope' })
+assert.equal(r.status, 400)
+assert.equal(r.payload.ok, false)
+console.log('20. 未知文件 key → 400')
+
+/* 21. 打开已知文件 → 交给宿主（DSH_SELFNOTE_NO_OPEN 挡住真正的 explorer） */
+r = await call('POST', '/api/selfnote/open', { key: 'notes' })
+assert.equal(r.status, 200)
+assert.equal(r.payload.ok, true)
+assert.equal(r.payload.dryRun, true)
+assert.match(r.payload.opened, /notes\.md$/)
+console.log('21. 打开文件走宿主，测试里不 spawn')
+
+console.log('\n21 项全部通过（data dir: ' + dir + '）')
 process.exit(0)

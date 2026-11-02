@@ -37,6 +37,11 @@ const base = {
   profile: { enabled: true, override: '', maxChars: 60, manual: false, text: '', chars: 0, parts: [], sources: [], conflicts: [] },
   habits: [],
   habitSuggestions: [],
+  files: [
+    { key: 'notes', label: '自述', detail: 'agent 写的第一人称自述，一行一条', path: 'C:/x/notes.md', dir: false, exists: true, bytes: 2048, mtime: '2026-11-03T02:00:00.000Z', count: '1 条' },
+    { key: 'facts', label: '事实库', detail: '候选 / 已采纳 / 已退役的长期记忆', path: 'C:/x/memory/facts.jsonl', dir: false, exists: true, bytes: 3570, mtime: '2026-11-03T03:00:00.000Z', count: '候选 1 · 采纳 1 · 退役 0' },
+    { key: 'index', label: '会话索引', detail: '只存词元与位置，不含正文', path: 'C:/x/memory/index.json', dir: false, exists: false, bytes: 0, mtime: '', count: '未建立' },
+  ],
 }
 
 // 关键：这两条是自动采集来的，没有 citation，只有 source / occurrences，而且互相冲突
@@ -184,5 +189,17 @@ assert.ok(json.includes('沟通 ×2'))
 assert.ok(!json.includes('undefined'), '画像页也不该出现 undefined')
 forcedTab = null
 console.log('5. 画像页显示来源与冲突，且没有 undefined')
+
+/* 6. 文件卡：标签、路径、大小、条数都在；没生成的降级显示 */
+tree = render(base)
+json = JSON.stringify(tree)
+assert.match(json, /sn-files/, '概览页要有文件区')
+assert.ok(json.includes('C:/x/notes.md'), '要显示真实路径')
+assert.ok(json.includes('2.0 KB'), '要显示字节大小')
+assert.ok(json.includes('候选 1 · 采纳 1 · 退役 0'), '事实库要显示三种状态的条数')
+assert.ok(json.includes('还没生成'), '缺文件的条目要说明还没生成')
+assert.ok(!json.includes('undefined'), '文件卡不该出现 undefined')
+console.log('6. 文件卡显示路径/大小/条数，缺失的降级')
+console.log('\n6 项全部通过')
 
 process.exit(0)

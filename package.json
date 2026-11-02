@@ -1,6 +1,6 @@
 {
   "name": "dsh-selfnote",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "type": "module",
   "description": "Self-narrative memory for DeepSeek Harness: the model writes notes to itself, which persist across sessions and are injected back. | 自我叙述库：模型写给自己看的话，跨会话保留并每回合注入。",
   "keywords": [
