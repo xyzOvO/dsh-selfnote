@@ -87,7 +87,7 @@ console.log('11. 只认 user/message + source.kind=user')
 /* 12. 提交顺序：写候选失败时游标不许前进 */
 let threw = false
 try {
-  capture.commitObservation({ sessionId: 's3', seq: 7, text: 'x' }, () => {
+  await capture.commitObservation({ sessionId: 's3', seq: 7, text: 'x' }, () => {
     throw new Error('磁盘满了')
   })
 } catch {
@@ -98,10 +98,10 @@ assert.equal(capture.readCursor().s3, undefined, '写失败时游标不能动')
 console.log('12. 候选写失败 → 游标不前进')
 
 /* 13. 提交成功 → 游标前进，第二次同样 seq 直接跳过 */
-const okOne = capture.commitObservation({ sessionId: 's3', seq: 7, text: 'x' }, () => 'written')
+const okOne = await capture.commitObservation({ sessionId: 's3', seq: 7, text: 'x' }, () => 'written')
 assert.equal(okOne.skipped, null, '正常提交 skipped 为 null')
 assert.equal(Number(capture.readCursor().s3), 7)
-const again = capture.commitObservation({ sessionId: 's3', seq: 7, text: 'x' }, () => 'written')
+const again = await capture.commitObservation({ sessionId: 's3', seq: 7, text: 'x' }, () => 'written')
 assert.equal(again.skipped, 'cursor', '重放同一条应当按游标跳过')
 console.log('13. 提交成功推进游标，重复提交跳过')
 
@@ -132,10 +132,10 @@ assert.equal(capture.compareCandidate('回答简短点、慢一点', '回答简�
 console.log('17. 多维度方向集合，能发现第二组冲突')
 
 /* 18. seq 必须是安全的非负整数 */
-assert.equal(capture.commitObservation({ sessionId: 's9', seq: null }, () => 'x').ok, false)
-assert.equal(capture.commitObservation({ sessionId: 's9', seq: '10' }, () => 'x').ok, true)
-assert.equal(capture.commitObservation({ sessionId: 's9', seq: -1 }, () => 'x').ok, false)
-assert.equal(capture.commitObservation({ sessionId: 's9', seq: 1.5 }, () => 'x').ok, false)
+assert.equal((await capture.commitObservation({ sessionId: 's9', seq: null }, () => 'x')).ok, false)
+assert.equal((await capture.commitObservation({ sessionId: 's9', seq: '10' }, () => 'x')).ok, true)
+assert.equal((await capture.commitObservation({ sessionId: 's9', seq: -1 }, () => 'x')).ok, false)
+assert.equal((await capture.commitObservation({ sessionId: 's9', seq: 1.5 }, () => 'x')).ok, false)
 console.log('18. seq 校验：只收非负整数')
 
 /* 19. 游标文件损坏：备份后抛错，不静默从头来 */
@@ -155,7 +155,7 @@ console.log('19. 游标损坏：先备份再抛错')
 
 /* 20. commitObservation 传 facts 现读函数时，按 source 跳过且推进游标 */
 const beforeSeq = Number(capture.readCursor().s8 ?? 0)
-const res = capture.commitObservation({ sessionId: 's8', seq: beforeSeq + 5 }, () => 'should-not-run', {
+const res = await capture.commitObservation({ sessionId: 's8', seq: beforeSeq + 5 }, () => 'should-not-run', {
   facts: () => [{ id: 'x', source: `s8#${beforeSeq + 5}`, status: 'candidate' }],
 })
 assert.equal(res.skipped, 'source')

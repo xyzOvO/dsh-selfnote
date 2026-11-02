@@ -26,7 +26,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node tests/smoke.mjs && node tests/memory.mjs && node tests/roles.mjs && node tests/heat.mjs && node tests/capture.mjs && node tests/index.mjs && node tests/profile.mjs && node tests/api.mjs && node tests/client.mjs"
+    "test": "node tests/smoke.mjs && node tests/memory.mjs && node tests/roles.mjs && node tests/heat.mjs && node tests/capture.mjs && node tests/capture-p1b.mjs && node tests/index.mjs && node tests/profile.mjs && node tests/api.mjs && node tests/client.mjs"
   },
   "engines": {
     "node": ">=20.13.0"
