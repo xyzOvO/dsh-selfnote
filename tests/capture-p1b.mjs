@@ -162,5 +162,27 @@ assert.equal(facts.length, 0)
 assert.equal(Number(capture.readCursor().s6), 8, '没候选也要推进游标')
 console.log('10. 注入内容与闲聊都不采，但游标照常前进')
 
-console.log('\n10 组断言全部通过（data dir: ' + dir + '）')
+/* 11. 并发乱序：seq=11 先处理完，seq=10 后到也不能被丢掉 */
+facts = []
+const ev11 = userEvent('以后回答都用英文', 11)
+const ev10 = userEvent('以后代码都要写注释', 10)
+const pLate = capture.enqueue('s7', () => run.handleEvent(ev11, { sessionId: 's7', readFacts, writeFacts }))
+const pEarly = capture.enqueue('s7', () => run.handleEvent(ev10, { sessionId: 's7', readFacts, writeFacts }))
+const [lateResult, earlyResult] = await Promise.all([pLate, pEarly])
+assert.equal(lateResult.handled, true)
+assert.equal(earlyResult.handled, true, '后到的 seq=10 必须照样处理，不能被游标判成旧事件')
+const texts = facts.map((fact) => fact.text)
+assert.ok(texts.some((t) => t.includes('英文')))
+assert.ok(texts.some((t) => t.includes('注释')))
+assert.equal(Number(capture.readCursor().s7), 11)
+console.log('11. 同会话并发乱序：慢的那条不会被丢')
+
+/* 12. 真重放：seq 远落后于游标 → 直接跳过 */
+const advance = await run.handleEvent(userEvent('以后回答都用中文', 1000), { sessionId: 's7', readFacts, writeFacts })
+assert.equal(advance.handled, true)
+const stale = await run.handleEvent(userEvent('以后回答都用中文', 400), { sessionId: 's7', readFacts, writeFacts })
+assert.equal(stale.handled, false)
+assert.equal(stale.reason, 'cursor')
+console.log('12. 明显落后的重放仍然跳过')
+console.log('\n12 组断言全部通过（data dir: ' + dir + '）')
 process.exit(0)
