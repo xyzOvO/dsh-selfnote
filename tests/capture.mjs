@@ -4,7 +4,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -99,10 +99,10 @@ console.log('12. 候选写失败 → 游标不前进')
 
 /* 13. 提交成功 → 游标前进，第二次同样 seq 直接跳过 */
 const okOne = capture.commitObservation({ sessionId: 's3', seq: 7, text: 'x' }, () => 'written')
-assert.equal(okOne.skipped, false)
+assert.equal(okOne.skipped, null, '正常提交 skipped 为 null')
 assert.equal(Number(capture.readCursor().s3), 7)
 const again = capture.commitObservation({ sessionId: 's3', seq: 7, text: 'x' }, () => 'written')
-assert.equal(again.skipped, true, '重放同一条应当跳过')
+assert.equal(again.skipped, 'cursor', '重放同一条应当按游标跳过')
 console.log('13. 提交成功推进游标，重复提交跳过')
 
 /* 14. 写成功但游标丢了 → 靠来源去重兜底 */
@@ -111,5 +111,56 @@ assert.equal(capture.alreadyCaptured(facts, 's3#7'), true)
 assert.equal(capture.alreadyCaptured(facts, 's3#8'), false)
 console.log('14. 重放时按 source 兜底去重')
 
-console.log('\n14 项全部通过')
+/* 15. 采集门槛：有时间持续但不是给我的要求 → 不采 */
+assert.deepEqual(capture.candidatesOf('我以后再也不熬夜了。'), [])
+assert.deepEqual(capture.candidatesOf('我以后都不吃辣了。'), [])
+assert.equal(capture.hasScope('我以后再也不熬夜了'), false)
+console.log('15. 「以后」但不涉及交互要求 → 不采')
+
+/* 16. 同一个触发，涉及回答方式 → 采 */
+assert.deepEqual(capture.candidatesOf('以后回答都用中文。'), ['以后回答都用中文。'])
+assert.equal(capture.candidatesOf('我希望以后回答更简洁。').length, 1)
+assert.equal(capture.candidatesOf('以后提醒我不要熬夜。').length, 1)
+console.log('16. 涉及回答/提醒的长期要求 → 采')
+
+/* 17. 方向是集合：一句话里同时有长短与快慢，两个都要抓到 */
+const dirs = capture.directionsOf('回答简短点、速度慢一点')
+assert.equal(dirs.has('简短'), true)
+assert.equal(dirs.has('慢'), true)
+assert.equal(dirs.size, 2)
+assert.equal(capture.compareCandidate('回答简短点、慢一点', '回答简短点、快一点').action, 'conflict')
+console.log('17. 多维度方向集合，能发现第二组冲突')
+
+/* 18. seq 必须是安全的非负整数 */
+assert.equal(capture.commitObservation({ sessionId: 's9', seq: null }, () => 'x').ok, false)
+assert.equal(capture.commitObservation({ sessionId: 's9', seq: '10' }, () => 'x').ok, true)
+assert.equal(capture.commitObservation({ sessionId: 's9', seq: -1 }, () => 'x').ok, false)
+assert.equal(capture.commitObservation({ sessionId: 's9', seq: 1.5 }, () => 'x').ok, false)
+console.log('18. seq 校验：只收非负整数')
+
+/* 19. 游标文件损坏：备份后抛错，不静默从头来 */
+const broken = capture.cursorPath()
+writeFileSync(broken, '{ this is not json')
+let corrupt = null
+try {
+  capture.readCursor()
+} catch (error) {
+  corrupt = error
+}
+assert.equal(corrupt?.name, 'CursorCorruptError')
+assert.ok(corrupt.backup.includes('.corrupt-'))
+assert.equal(existsSync(broken), false, '坏文件应当被移走')
+assert.equal(existsSync(corrupt.backup), true)
+console.log('19. 游标损坏：先备份再抛错')
+
+/* 20. commitObservation 传 facts 现读函数时，按 source 跳过且推进游标 */
+const beforeSeq = Number(capture.readCursor().s8 ?? 0)
+const res = capture.commitObservation({ sessionId: 's8', seq: beforeSeq + 5 }, () => 'should-not-run', {
+  facts: () => [{ id: 'x', source: `s8#${beforeSeq + 5}`, status: 'candidate' }],
+})
+assert.equal(res.skipped, 'source')
+assert.equal(Number(capture.readCursor().s8), beforeSeq + 5)
+console.log('20. 写入路径自己接 source 去重')
+
+console.log('\n20 项全部通过')
 process.exit(0)
