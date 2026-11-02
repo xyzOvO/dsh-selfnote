@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/version-0.9.0-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
-  <img src="https://img.shields.io/badge/tests-127%20passed-0ea5e9" alt="tests">
+  <img src="https://img.shields.io/badge/tests-131%20passed-0ea5e9" alt="tests">
 </p>
 
 ---
@@ -89,6 +89,17 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 > 你写一条自述，说说你做这类插件时的习惯。
 
 模型会调用 `self_note`，写进 `notes.md`，以后每个会话都带着。
+
+### 设置页分四页
+
+| 页签 | 里面是什么 | 角标 |
+|---|---|---|
+| **概览** | 注入开关、字数 / 条数上限、本回合注入的预算条（自述 / 画像 / 结论 / 习惯）、索引规模、文件位置 | — |
+| **自述** | 手动写一条、清空（进归档）、现在生效的自述列表 | 自述条数 |
+| **记忆** | 待确认候选（冲突并排）、已采纳（带热度）、可以升成习惯的标签 | 有待审时显示「待审 N」 |
+| **画像** | 从已采纳记忆聚合的「关于你」，可手改覆盖，每句带来源 | 画像字数 |
+
+有待审候选时直接落在「记忆」页，没有就停在「概览」；页签支持 ←/→/Home/End 切换。
 
 ## 记忆怎么流动
 
@@ -195,7 +206,7 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 ## 开发
 
 ```bash
-node --run test     # 127 项，12 个文件，无外部依赖
+node --run test     # 131 项，12 个文件，无外部依赖
 ```
 
 | 文件 | 覆盖 |
