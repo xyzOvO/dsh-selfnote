@@ -77,5 +77,39 @@ capture.markSeen('s1', 5)
 assert.equal(Number(capture.readCursor().s1), 10, '旧 seq 不该把游标拉回去')
 console.log('10. 游标只前进')
 
-console.log('\n10 项全部通过')
+/* 11. 事件过滤：类型和 source.kind 两个都要满足 */
+assert.equal(capture.isUserAuthored({ type: 'user/message', data: { source: { kind: 'user' } } }), true)
+assert.equal(capture.isUserAuthored({ type: 'user/message', data: { source: { kind: 'system-prompt' } } }), false)
+assert.equal(capture.isUserAuthored({ type: 'assistant/message', data: { source: { kind: 'user' } } }), false)
+assert.equal(capture.isUserAuthored(null), false)
+console.log('11. 只认 user/message + source.kind=user')
+
+/* 12. 提交顺序：写候选失败时游标不许前进 */
+let threw = false
+try {
+  capture.commitObservation({ sessionId: 's3', seq: 7, text: 'x' }, () => {
+    throw new Error('磁盘满了')
+  })
+} catch {
+  threw = true
+}
+assert.equal(threw, true, '写入失败应当抛出来，交给调用方记日志')
+assert.equal(capture.readCursor().s3, undefined, '写失败时游标不能动')
+console.log('12. 候选写失败 → 游标不前进')
+
+/* 13. 提交成功 → 游标前进，第二次同样 seq 直接跳过 */
+const okOne = capture.commitObservation({ sessionId: 's3', seq: 7, text: 'x' }, () => 'written')
+assert.equal(okOne.skipped, false)
+assert.equal(Number(capture.readCursor().s3), 7)
+const again = capture.commitObservation({ sessionId: 's3', seq: 7, text: 'x' }, () => 'written')
+assert.equal(again.skipped, true, '重放同一条应当跳过')
+console.log('13. 提交成功推进游标，重复提交跳过')
+
+/* 14. 写成功但游标丢了 → 靠来源去重兜底 */
+const facts = [{ id: 'a', source: 's3#7', status: 'candidate' }]
+assert.equal(capture.alreadyCaptured(facts, 's3#7'), true)
+assert.equal(capture.alreadyCaptured(facts, 's3#8'), false)
+console.log('14. 重放时按 source 兜底去重')
+
+console.log('\n14 项全部通过')
 process.exit(0)
