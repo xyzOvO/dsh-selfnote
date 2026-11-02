@@ -9,6 +9,8 @@ import { join } from 'node:path'
 
 const dir = mkdtempSync(join(tmpdir(), 'selfnote-'))
 process.env.DSH_SELFNOTE_DIR = dir
+// 记忆层也要隔离，否则读到本机真实的 facts（画像是从 approved facts 现算的）
+process.env.DSH_MEMORY_DIR = join(dir, 'memory')
 
 const { apply } = await import('../lib/index.js')
 
