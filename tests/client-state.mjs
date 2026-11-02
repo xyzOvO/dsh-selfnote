@@ -36,7 +36,8 @@ const fixture = {
   // 关键：这条是自动采集来的，没有 citation，只有 source / occurrences
   facts: {
     candidates: [
-      { id: 'auto-1', text: '以后回答先给结论', status: 'candidate', source: 'session-abc#12', occurrences: 4, similarTo: [], evidence: ['session-abc#12'] },
+      { id: 'auto-1', text: '以后回答先给结论', status: 'candidate', source: 'session-abc#12', occurrences: 4, triggers: ['standing'], conflictWith: 'auto-2', similarTo: ['auto-2'], evidence: ['session-abc#12'] },
+      { id: 'auto-2', text: '以后回答先铺垫背景再给结论', status: 'candidate', source: 'session-abc#30', occurrences: 1, triggers: ['correct'], conflictWith: 'auto-1', similarTo: ['auto-1'], evidence: ['session-abc#30'] },
     ],
     approved: [
       { id: 'f1', text: '索引只存词元', status: 'approved', citation: { sessionId: 'session-abc', index: 7, date: '2026-11-02' }, heat: 1.5 },
@@ -81,6 +82,10 @@ assert.ok(json.includes('以后回答先给结论'), '候选文本要显示出�
 assert.ok(json.includes('自动采集'), '自动采集的候选要标出来源')
 assert.ok(json.includes('出现 4 次'), '要显示出现次数')
 assert.ok(json.includes('session-abc'), '手动提交的仍显示 citation')
+assert.ok(json.includes('两条说法对不上'), '冲突要并排显示，而不是只给一句提示')
+assert.ok(json.includes('以后回答先铺垫背景再给结论'), '冲突对方的内容也要显示出来')
+assert.ok(json.includes('长期约定') && json.includes('纠正'), '要显示触发原因')
+assert.ok(json.includes('新候选') && json.includes('已有的'), '两侧要标出哪条是新的哪条是旧的')
 assert.ok(!json.includes('undefined'), '渲染结果里不该出现 undefined')
 console.log('1. 有自动采集候选时也能正常渲染（不再白板）')
 
