@@ -177,7 +177,7 @@ assert.equal(r.payload.enabled, true)
 r = await call('POST', '/api/selfnote/fact', { id: staged.fact.id, status: 'approved' })
 assert.equal(r.status, 200)
 assert.equal(r.payload.facts.approved.length, 1)
-assert.ok(r.payload.budget.facts > 0, '采纳的结论要占注入预算')
+assert.ok(r.payload.budget.facts + r.payload.budget.profile > 0, '采纳的内容要占注入预算（画像或结论段）')
 assert.match(injectionDef.text(), /先结论/)
 console.log('12. 采纳 → 进入注入文本')
 

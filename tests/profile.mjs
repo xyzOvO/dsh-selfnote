@@ -115,10 +115,21 @@ writeConfig({ ...readConfig(), profileEnabled: true })
 assert.match(inject(), /关于你（从已采纳记忆聚合，不是新事实）：/)
 console.log('9. 重新打开后恢复')
 
-/* 10. 事实全部退役 → 画像为空（不残留旧文本） */
+/* 10. 去重：被画像吸收的事实不再在「常驻结论」段重复 */
+const dedup = inject()
+const profileNow = buildProfile(memory.listFacts(), { maxChars: 120 })
+assert.ok(profileNow.sources.length > 0)
+for (const id of profileNow.sources) {
+  const text = memory.listFacts().find((item) => item.id === id).text
+  const times = dedup.split(text).length - 1
+  assert.equal(times, 1, '这条事实在注入里出现了 ' + times + ' 次：' + text)
+}
+console.log('10. 画像吸收过的事实不再重复（' + profileNow.sources.length + ' 条各出现一次）')
+
+/* 11. 事实全部退役 → 画像为空（不残留旧文本） */
 for (const item of memory.listFacts('approved')) memory.setFactStatus(item.id, 'retired')
 assert.equal(buildProfile(memory.listFacts(), { maxChars: 120 }).text, '')
-console.log('10. 没有已采纳事实时画像为空（不缓存旧结果）')
+console.log('11. 没有已采纳事实时画像为空（不缓存旧结果）')
 
-console.log('\n10 项全部通过')
+console.log('\n11 项全部通过')
 process.exit(0)
