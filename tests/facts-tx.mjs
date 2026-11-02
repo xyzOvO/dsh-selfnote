@@ -1,10 +1,10 @@
 /**
- * facts.jsonl 的写事务：读 → 改 → 写 必须是一段同步代码，且不覆盖别人的改动。
+ * facts.jsonl 的写事务：拿锁 → 读 → 改 → 写，跨进程互斥，放弃时不留半份。
  * 跑法：node tests/facts-tx.mjs
  */
 
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -14,6 +14,7 @@ process.env.DSH_MEMORY_DIR = join(dir, 'memory')
 const { mutateFacts, readFacts, writeFacts, touchFacts, setFactStatus } = await import('../lib/memory.js')
 
 const factsFile = join(process.env.DSH_MEMORY_DIR, 'facts.jsonl')
+const lockFile = factsFile + '.lock'
 const seed = (facts) => writeFacts(facts)
 
 /* 1. 基本形状：changed:false 不写盘 */
@@ -22,9 +23,9 @@ const before = readFileSync(factsFile, 'utf8')
 const noop = mutateFacts(() => ({ changed: false }))
 assert.equal(noop.changed, false)
 assert.equal(readFileSync(factsFile, 'utf8'), before, '没改动就不该落盘')
-console.log('1. changed:false 不写文件')
+console.log('1. changed:false 不写文件，也不留锁')
 
-/* 2. 注入记热度不能把并发写进来的候选抹掉 */
+/* 2. 注入记热度不能把已有候选抹掉 */
 seed([
   { id: 'a', text: '以后回答先给结论', status: 'approved', hitCount: 0 },
   { id: 'b', text: '以后别用表情', status: 'candidate' },
@@ -35,43 +36,36 @@ assert.equal(facts.find((f) => f.id === 'a').hitCount, 1)
 assert.ok(facts.find((f) => f.id === 'b'), '候选不该被热度的整份写回覆盖')
 console.log('2. 记热度不覆盖已有候选')
 
-/* 3. 跨进程：读到之后文件被别人改过，要重读重做而不是覆盖 */
+/* 3. 锁被别的进程占着：重试后放弃，绝不写半份 */
 seed([{ id: 'a', text: '以后回答先给结论', status: 'approved', hitCount: 0 }])
-let injected = false
-mutateFacts((current) => {
-  const target = current.find((f) => f.id === 'a')
-  target.hitCount = 1
-  if (!injected) {
-    injected = true
-    // 模拟另一个窗口：在我们读完之后，它往里写了一条新候选
-    const other = readFacts()
-    other.push({ id: 'z', text: '以后多用例子', status: 'candidate' })
-    writeFacts(other)
-  }
+writeFileSync(lockFile, '')
+const blocked = mutateFacts((current) => {
+  current.push({ id: 'mine', text: '我的改动', status: 'candidate' })
+  return { changed: true }
+}, 2)
+assert.equal(blocked.changed, false)
+assert.match(blocked.error, /一直被别的进程占着/)
+facts = readFacts()
+assert.equal(facts.some((fact) => fact.id === 'mine'), false, '放弃时不能留下半份写入')
+
+/* 4. 崩溃遗留的锁（超过 2 秒）可以被接管 */
+const stale = new Date(Date.now() - 5000)
+utimesSync(lockFile, stale, stale)
+const tookOver = mutateFacts((current) => {
+  current.push({ id: 'after-stale', text: '接管之后写的', status: 'candidate' })
   return { changed: true }
 })
+assert.equal(tookOver.changed, true, '陈旧锁必须能接管，否则一次崩溃就永久写不进去')
 facts = readFacts()
-assert.equal(facts.find((f) => f.id === 'a').hitCount, 1, '自己的改动要落下')
-assert.ok(facts.find((f) => f.id === 'z'), '别人的改动不能被覆盖')
-console.log('3. 别人先写过 → 重读重做，两边改动都在')
+assert.ok(facts.some((fact) => fact.id === 'after-stale'))
+console.log('3. 锁被占 → 放弃不写半份；陈旧锁 → 能接管')
 
-/* 4. 连续被改：宁可失败也不覆盖 */
-let rounds = 0
-const lost = mutateFacts((current) => {
-  current.push({ id: 'mine-' + rounds, text: '我的改动', status: 'candidate' })
-  rounds += 1
-  const other = readFacts()
-  other.push({ id: 'theirs-' + rounds, text: '别人的改动', status: 'candidate' })
-  writeFacts(other)
-  return { changed: true }
-})
-assert.equal(lost.changed, false)
-assert.match(lost.error, /一直被别的进程改写/)
-facts = readFacts()
-assert.equal(facts.some((f) => f.id === 'mine-3'), false, '放弃时不能留下半份写入')
-console.log('4. 一直被抢先就放弃，不写半份结果')
+/* 5. 正常写完不留锁文件 */
+assert.equal(readFileSync(factsFile, 'utf8').length > 0, true)
+assert.throws(() => readFileSync(lockFile, 'utf8'), /ENOENT/, '写完必须把锁放掉')
+console.log('4. 写完放锁，不留锁文件')
 
-/* 5. 审核改状态也走同一个事务：找不到 id 时不写盘 */
+/* 6. 审核改状态也走同一个事务：找不到 id 时不写盘 */
 seed([{ id: 'q', text: '以后回答先给结论', status: 'candidate' }])
 const stamp = readFileSync(factsFile, 'utf8')
 const miss = setFactStatus('nope', 'approved')

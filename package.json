@@ -27,7 +27,8 @@
     "assets"
   ],
   "scripts": {
-    "test": "node tests/smoke.mjs && node tests/memory.mjs && node tests/roles.mjs && node tests/heat.mjs && node tests/facts-tx.mjs && node tests/capture.mjs && node tests/capture-p1b.mjs && node tests/index.mjs && node tests/profile.mjs && node tests/api.mjs && node tests/client-state.mjs && node tests/client.mjs"
+    "test": "node tests/smoke.mjs && node tests/memory.mjs && node tests/roles.mjs && node tests/heat.mjs && node tests/facts-tx.mjs && node tests/capture.mjs && node tests/capture-p1b.mjs && node tests/index.mjs && node tests/profile.mjs && node tests/api.mjs && node tests/client-state.mjs && node tests/client.mjs",
+    "test:accept": "node tests/acceptance-runtime.mjs"
   },
   "engines": {
     "node": ">=20.13.0"
