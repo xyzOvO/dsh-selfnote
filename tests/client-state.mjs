@@ -257,6 +257,36 @@ assert.ok(!json.includes('undefined'), '注入页不该出现 undefined')
 forcedTab = null
 console.log('8. 注入页：原文、分段占位、被挤掉的条目都在')
 
-console.log('\n8 项全部通过')
+/* 9. 归属里的「只搜到过」：没进过注入但被翻到过，不能显示成「从没进过」 */
+const withAttr = {
+  ...withCandidates,
+  facts: { candidates: [], approved: withCandidates.facts.approved, retired: 0 },
+  attribution: {
+    staleDays: 30,
+    total: 2,
+    live: 0,
+    stale: 0,
+    searched: 1,
+    never: 1,
+    bySegment: { notes: 0, profile: 0, env: 0, facts: 0 },
+    rows: [
+      { id: 'a1', text: '只被搜到过的一条', channel: 'rel', segment: null, hits: 0, lastHit: null, days: null, seen: 3, lastSeen: '2026-11-02T00:00:00.000Z', seenDays: 2, state: 'searched' },
+      { id: 'a2', text: '一次都没用过的一条', channel: 'env', segment: null, hits: 0, lastHit: null, days: null, seen: 0, lastSeen: null, seenDays: null, state: 'never' },
+    ],
+  },
+}
+forcedTab = 'injection'
+tree = render(withAttr)
+json = JSON.stringify(tree)
+assert.ok(json.includes('只搜到过 1'), '汇总里要有这一档，否则搜到过的被算进「从没进过」')
+assert.ok(json.includes('翻了 3 次'), '只搜到过的显示翻了次数，不是进了多少次注入')
+assert.ok(json.includes('2 天前搜到'), '要显示上次搜到的时间')
+assert.ok(json.includes('搜到过'), '徽章要说清是搜到过，不是进过')
+assert.ok(json.includes('从没进过'), '真没用过的仍然要显示从没进过')
+assert.ok(!json.includes('undefined'), '归属卡不该出现 undefined')
+forcedTab = null
+console.log('9. 归属卡区分「只搜到过」与「从没进过」')
+
+console.log('\n9 项全部通过')
 
 process.exit(0)

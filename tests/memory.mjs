@@ -168,6 +168,14 @@ assert.equal(memory.listFacts('approved').length, 0)
 assert.equal(memory.setFactStatus(good.fact.id, '不存在的状态').ok, false)
 console.log('13. 候选 → 采纳 → 退役，非法状态被拒')
 
+/* 回归：退役后再恢复，retiredAt 必须被清掉，不能留下「approved 却带退役日期」的矛盾 */
+assert.equal(memory.setFactStatus(good.fact.id, 'approved').ok, true)
+const revived = memory.listFacts('approved').find((item) => item.id === good.fact.id)
+assert.ok(revived !== undefined, '恢复后应回到 approved 列表')
+assert.equal('retiredAt' in revived, false, '恢复采纳后不该残留 retiredAt')
+assert.equal(memory.setFactStatus(good.fact.id, 'retired').ok, true, '复原到退役态，不影响后面的计数断言')
+console.log('13b. 退役 → 恢复 → 再退役，retiredAt 被清除（回归）')
+
 /* ---------- 14. 习惯由频次触发 ---------- */
 
 for (const text of ['第二条', '第三条', '第四条']) {
@@ -189,5 +197,30 @@ assert.equal(stats.approved, 3)
 assert.ok(stats.cache >= 1)
 console.log('15. memoryStats 数字对得上')
 
-console.log('\n15 项全部通过')
+/* 16. 检索留痕：seenCount 与 hitCount 分开记 —— 搜到不等于用上 */
+{
+  writeFileSync(
+    join(cache, 'facts.jsonl'),
+    JSON.stringify({ id: 'f-seen', text: '一条会被搜到的事实', status: 'approved', hitCount: 0 }) + '\n',
+  )
+  assert.equal(memory.seenFacts(['f-seen']), 1, '第一次要记')
+  let fact = memory.readFacts().find((item) => item.id === 'f-seen')
+  assert.equal(fact.seenCount, 1)
+  assert.equal(fact.hitCount ?? 0, 0, '热能是「进注入」才算，检索不许动它')
+  assert.ok(Number.isFinite(Date.parse(fact.lastSeen)))
+
+  assert.equal(memory.seenFacts(['f-seen']), 0, '十分钟内重复搜不算第二次')
+  fact = memory.readFacts().find((item) => item.id === 'f-seen')
+  assert.equal(fact.seenCount, 1)
+
+  // 十分钟后再搜要能记上
+  assert.equal(memory.seenFacts(['f-seen'], Date.now() + 11 * 60 * 1000), 1)
+  fact = memory.readFacts().find((item) => item.id === 'f-seen')
+  assert.equal(fact.seenCount, 2)
+
+  assert.equal(memory.seenFacts([]), 0, '空列表不该写盘')
+  console.log('16. 检索留痕：seenCount 单独记，不动热度，十分钟内去重')
+}
+
+console.log('\n16 项全部通过')
 process.exit(0)

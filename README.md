@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.10.5-4f46e5" alt="version">
+  <img src="https://img.shields.io/badge/version-0.10.6-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
   <img src="https://img.shields.io/badge/tests-146%20passed-0ea5e9" alt="tests">
@@ -131,9 +131,10 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 |---|---|
 | 在用 | 最近 30 天内真的被贴进过提示词 |
 | 静默 | 进过，但 30 天没再进过 —— 占着位置没在干活 |
-| 从没进过 | 采纳了，却一次都没轮到它（被别的段挤掉，或被画像吸收） |
+| 只搜到过 | 没进过提示词，但被 `memory_search` / `memory_recall` 翻到过（弱证据：搜到不等于用上） |
+| 从没进过 | 采纳了，却一次都没轮到它、也没被搜到过（被别的段挤掉，或被画像吸收） |
 
-数据来自两个早就存在的字段：`hitCount`（**只有真的进了这句话才 +1**，被检索到不算）和 `lastHit`。所以它衡量的是「占了多少位置」，不是「有多重要」—— 重要性靠人判断，插件不替你做。
+数据来自两对字段：`hitCount` / `lastHit`（**只有真的进了这句话才 +1**），以及 `seenCount` / `lastSeen`（被检索翻到就 +1，十分钟内只算一次）。两本账分开记，是因为「进了上下文」和「被翻出来过」不是一回事：热度衡量的是**占了多少位置**，不是有多重要 —— 重要性靠人判断，插件不替你做。
 
 它能回答一个具体问题：**多加的 100 字，到底该给谁。** 静默条目就是候选答案。
 
@@ -322,7 +323,15 @@ DSH 的会话文件是**逐条追写**的 zstd 序列（一次写入 = 一个 fr
 | 设置页准入 | 最近 24 小时拒了几次、主因 | 一直在 403，说明配置错了 |
 | 记忆心跳 | 上次注入是多久前 | 注入停了 |
 
-`GET /api/selfnote/doctor` 返回 `{ok, level, checks[]}`，每项 `{key, label, level, detail, fix}`。
+`GET /api/selfnote/doctor` 返回 `{ok, level, checks, next}`，每项 `{key, label, level, detail, fix}`。
+
+`next` 是「**先做这一件**」：十条检查人只会动第一条，所以服务端按后果排好序 —— 数据完整性（丢了补不回来）> 索引（检索能不能用）> 采集 > 设置页准入 > 自述与心跳。设置页把这条顶在列表上方。
+
+### 子代理不注入
+
+委派出去的子代理（`subagent`）不注入记忆。理由不是省字，是**它们不接着跟这个人聊**：每层子代理都带 460 字，既白烧 token，又会把父会话的记忆往子代理的候选里引（这条坑在采集侧已经踩过一次）。
+
+怎么判断：驱动循环整个生命周期都跑在 `ctx.agents.withInitiator(agent)` 里，所以组装提示词时 `currentInitiator()` 就是正在组装的那个 agent —— 读它的 `session.header` 就能认出 `origin === 'subagent'` 或 `delegationDepth > 0`。拿不到就按「不是委派」处理：宁可多注入，不许漏。跳过次数记在 `/state` 的 `injection.delegatedSkips` 里，不是口头承诺。
 
 ## 心跳
 

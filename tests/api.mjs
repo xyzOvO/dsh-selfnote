@@ -28,10 +28,13 @@ function authHeaders(extra) {
 let handler = null
 const toolHold = []
 let injectionDef = null
+// 驱动循环整个生命周期都在 withInitiator(agent) 里，所以注入时要能问出「当前是哪个 agent」
+let currentAgent = null
 
 const ctx = {
   logger: { info() {} },
   on() {},
+  agents: { currentInitiator: () => currentAgent },
   systemPrompt: { context(def) { injectionDef = def; return () => {} } },
   tools: { register(def) { toolHold.push(def); return () => {} } },
   webServer: {
@@ -372,7 +375,11 @@ writeFileSync(factsFile, readFileSync(factsFile, 'utf8') + '{"id":"broken",\n')
 r = await call('GET', '/api/selfnote/doctor')
 assert.equal(r.payload.level, 'error', '有坏行就要报 error')
 assert.match(r.payload.checks.find((item) => item.key === 'facts').detail, /解析不出来/)
-console.log('26. 体检：五项各有判据，坏行会被抓出来')
+/* 十条检查里人只会动第一条 —— 所以要给出「先做这一件」，而且必须是真有问题的那条 */
+assert.ok(r.payload.next, '有问题时要给出先做哪一件')
+assert.equal(r.payload.next.key, 'facts', '数据完整性排最前：文件坏了别的都白搭')
+assert.ok(String(r.payload.next.detail).length > 0)
+console.log('26. 体检：五项各有判据，坏行会被抓出来，并给出先做哪一件')
 
 /* 27. 心跳：注入真的跑过才写。只读不写的状态文件等于没有状态 */
 injectionDef.text()
@@ -389,6 +396,7 @@ console.log('27. 心跳：注入一次就落一次盘')
     { id: 'attr-live', text: '今天还在用的一条', status: 'approved', channel: 'rel', hitCount: 4, lastHit: stamp(1) },
     { id: 'attr-stale', text: '四十天没进过的一条', status: 'approved', channel: 'rel', hitCount: 9, lastHit: stamp(40) },
     { id: 'attr-never', text: '采纳了却从没进过的一条', status: 'approved', channel: 'env', hitCount: 0 },
+    { id: 'attr-searched', text: '没进过注入但被搜到过的一条', status: 'approved', channel: 'rel', hitCount: 0, seenCount: 3, lastSeen: stamp(2) },
     { id: 'attr-cand', text: '还是候选', status: 'candidate', hitCount: 0 },
   ]
   writeFileSync(factsFile, attrRows.map((row) => JSON.stringify(row)).join('\n') + '\n')
@@ -397,7 +405,7 @@ console.log('27. 心跳：注入一次就落一次盘')
   assert.equal(r.status, 200)
   const attr = r.payload.attribution
   assert.ok(attr, 'state 里要有归属统计')
-  assert.equal(attr.total, 3, '只统计已采纳的，候选不算')
+  assert.equal(attr.total, 4, '只统计已采纳的，候选不算')
   const byId = Object.fromEntries(attr.rows.map((row) => [row.id, row]))
   assert.equal(byId['attr-live'].state, 'live')
   assert.equal(byId['attr-stale'].state, 'stale', '超过 30 天没进注入就是 stale')
@@ -405,9 +413,12 @@ console.log('27. 心跳：注入一次就落一次盘')
   assert.equal(byId['attr-never'].lastHit, null)
   assert.equal(byId['attr-stale'].hits, 9)
   assert.ok(byId['attr-stale'].days >= 39, '要能算出多少天前')
-  assert.deepEqual([attr.live, attr.stale, attr.never], [1, 1, 1], '三个计数要和行对上')
+  assert.equal(byId['attr-searched'].state, 'searched', '被搜到过的不该被说成从没进过')
+  assert.equal(byId['attr-searched'].seen, 3)
+  assert.ok(byId['attr-searched'].seenDays >= 1, '要能算出多少天前搜到')
+  assert.deepEqual([attr.live, attr.stale, attr.searched, attr.never], [1, 1, 1, 1], '四个计数要和行对上')
   assert.equal(attr.rows[0].state, 'stale', '没在用的排前面，方便清理')
-  console.log('28. 注入归属：在用 / 静默 / 从没进过 三种状态都算对')
+  console.log('28. 注入归属：在用 / 静默 / 只搜到过 / 从没进过 四种状态都算对')
 }
 
 /* 29. 环境门牌句要报真数：门牌自己占字，加进去后可能又多挤掉几条 */
@@ -460,5 +471,56 @@ console.log('27. 心跳：注入一次就落一次盘')
   console.log('30. 写自述的时机：能改、能清空、超长拒绝；上次写入时间读得到')
 }
 
-console.log('\n33 项全部通过（data dir: ' + dir + '）')
+/* 31. 温层检索命中事实要留痕：搜到过 ≠ 从没使用，但也不许冒充「进了注入」 */
+{
+  const stamp = new Date().toISOString()
+  writeFileSync(
+    factsFile,
+    JSON.stringify({ id: 'seen-1', text: '温层检索能翻到的一条环境事实', status: 'approved', channel: 'env', hitCount: 0 }) + '\n',
+  )
+  const searchTool = toolHold.find((tool) => tool.name === 'memory_search')
+  assert.ok(searchTool, '要有 memory_search 工具')
+  const hits = await searchTool.execute({ query: '温层检索' })
+  assert.equal(hits.total, 1, '这条事实应该被搜到')
+  const after = JSON.parse(readFileSync(factsFile, 'utf8').trim())
+  assert.equal(after.seenCount, 1, '搜到一次就要记一次')
+  assert.equal(after.hitCount ?? 0, 0, '搜到不等于进了注入，热度不许动')
+  assert.ok(Date.parse(after.lastSeen) >= Date.parse(stamp) - 1000, '要记下搜到的时间')
+
+  r = await call('GET', '/api/selfnote/state')
+  const seenRow = r.payload.attribution.rows.find((row) => row.id === 'seen-1')
+  assert.equal(seenRow.state, 'searched', '归属里要显示成「只搜到过」，不是「从没进过」')
+  assert.ok(seenRow.seen >= 1)
+
+  // 十分钟内重复搜同一条不重复计数（一次翻找算一次）
+  await searchTool.execute({ query: '温层检索' })
+  const twice = JSON.parse(readFileSync(factsFile, 'utf8').trim())
+  assert.equal(twice.seenCount, 1, '十分钟内重复搜不算第二次')
+  console.log('31. 检索留痕：搜到记 seenCount，不动热度，十分钟内不重复计')
+}
+
+/* 32. 委派会话（子代理）不注入：去干活不是接着聊，460 字既是白烧 token，也会污染候选 */
+{
+  writeFileSync(factsFile, JSON.stringify({ id: 'inj-1', text: '主线会话才有的一条记忆', status: 'approved', channel: 'rel' }) + '\n')
+  currentAgent = null
+  const normal = injectionDef.text()
+  assert.ok(normal.includes('主线会话才有的一条记忆'), '拿不到 agent 时按「不是委派」处理，宁可多注入')
+
+  currentAgent = { session: { header: { origin: 'main' } } }
+  assert.ok(injectionDef.text().includes('主线会话才有的一条记忆'), '主线会话照常注入')
+
+  currentAgent = { session: { header: { origin: 'subagent', delegationDepth: 1 } } }
+  assert.equal(injectionDef.text(), '', '子代理会话不注入')
+
+  // 分叉会话仍是本人（不按 parentSession 判断）
+  currentAgent = { session: { header: { origin: 'main', parentSession: 'session-x' } } }
+  assert.ok(injectionDef.text().includes('主线会话才有的一条记忆'), '分叉会话照常注入')
+
+  r = await call('GET', '/api/selfnote/state')
+  assert.ok(r.payload.injection.delegatedSkips >= 1, '跳过次数要能在设置页看到，不能只是「应该跳了」')
+  currentAgent = null
+  console.log('32. 委派会话不注入：子代理跳过并计数，主线与分叉照常')
+}
+
+console.log('\n35 项全部通过（data dir: ' + dir + '）')
 process.exit(0)
