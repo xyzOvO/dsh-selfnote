@@ -135,6 +135,29 @@ assert.equal(r.payload.archiveFiles, 1)
 assert.ok(r.payload.archivedFile.endsWith('.md'))
 console.log('7. 清空后进归档')
 
+/* 7b. 清空要在 auth.log 留痕 —— 事后能答「那会儿到底清了什么」 */
+const auditFile = join(dir, 'auth.log')
+assert.ok(existsSync(auditFile), '成功清空也要写 auth.log')
+const auditLines = readFileSync(auditFile, 'utf8')
+  .trim()
+  .split('\n')
+  .filter(Boolean)
+  .map((line) => JSON.parse(line))
+const clearLine = auditLines.filter((item) => item.action === 'clear').pop()
+assert.ok(clearLine, 'auth.log 里应有 action=clear 的记录')
+assert.equal(clearLine.cleared, 1)
+assert.ok(clearLine.archived && clearLine.archived.endsWith('.md'))
+assert.equal(typeof clearLine.at, 'string')
+console.log('7b. 清空在 auth.log 留痕')
+
+/* 7c. doctor 不能把这条成功记录当成「拒绝」 */
+assert.equal(
+  auditLines.filter((item) => typeof item.reason === 'string').length,
+  0,
+  '成功操作的记录不该带 reason 字段',
+)
+console.log('7c. 成功记录不污染拒绝统计')
+
 /* 8. 未知路由 */
 r = await call('GET', '/api/selfnote/nope')
 assert.equal(r.status, 404)
@@ -406,5 +429,5 @@ console.log('27. 心跳：注入一次就落一次盘')
   console.log('29. 环境门牌：另有 N 条里的 N 是真数')
 }
 
-console.log('\n30 项全部通过（data dir: ' + dir + '）')
+console.log('\n32 项全部通过（data dir: ' + dir + '）')
 process.exit(0)

@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.10.3-4f46e5" alt="version">
+  <img src="https://img.shields.io/badge/version-0.10.4-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
   <img src="https://img.shields.io/badge/tests-146%20passed-0ea5e9" alt="tests">
@@ -351,7 +351,17 @@ DSH 的会话文件是**逐条追写**的 zstd 序列（一次写入 = 一个 fr
 
 ### 设置页的准入凭证
 
-设置页的每个请求都要带 `x-selfnote: <token>`，并且 `Host` 必须是回环地址。这个 token 在每个插件实例首次启动时随机生成（或由 `DSH_SELFNOTE_TOKEN` 环境变量指定），由宿主注入到本页的 HTML 里；**它不是写在文档里的固定值**，本机其他进程照抄 README 也读不到你的记忆。带自定义头的跨站请求会触发预检，服务端不回 CORS 头，浏览器根本发不出来；此外还校验 `Origin` 与 `Host` 同源，挡住 DNS 重绑定。
+设置页的请求要过三道门：
+
+1. **`Host` 必须是回环地址或桌面壳（`dsh-app`）** —— 挡 DNS 重绑定；
+2. **带了 `Origin` 就必须同源** —— 跨站页面的请求根本发不出去（服务端不回 CORS 头）；
+3. **带了 `x-selfnote` 就必须等于本实例的 token** —— token 在首次启动时随机生成（或用 `DSH_SELFNOTE_TOKEN` 指定），存在 `~/.dsh/selfnote/auth-token`（权限 600）。**它不是写在文档里的固定值**，照抄 README 读不到你的记忆。
+
+第 3 条是**可选**的：桌面壳的页面从 `dsh-app://app` 加载，拿不到注入的 token，所以页面不带也放行；脚本调用带上它更稳妥。
+
+代价得说清楚：**同一用户的本机进程可以不带 token 直接调接口**。但 `~/.dsh/memory/facts.jsonl` 本来就是 644，同一进程直接 `cat` 就能读——端口没有给出新能力。真正需要挡的跨站与 DNS 重绑定，第 1、2 条挡着。
+
+**拒绝和成功的破坏性操作都记进 `~/.dsh/selfnote/auth.log`**：被拒的写 `reason`，成功清空自述的写 `action: 'clear'` + 清了几条 + 归档文件名。哪天自述突然空了，翻这个文件就知道是哪一次、几点、清了多少条。
 
 想用脚本自测，读 `~/.dsh/selfnote/auth-token`（权限 600），或自己设环境变量后带上它。
 
@@ -365,7 +375,7 @@ DSH 的会话文件是**逐条追写**的 zstd 序列（一次写入 = 一个 fr
 ## 开发
 
 ```bash
-node --run test              # 162 项，15 个文件，无外部依赖
+node --run test              # 181 项，16 个文件，无外部依赖
 node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 ```
 
