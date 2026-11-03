@@ -314,6 +314,8 @@ assert.equal(inj.limit, 300)
 assert.deepEqual(inj.segments.map((seg) => seg.key), ['notes', 'profile', 'facts', 'habits'])
 assert.deepEqual(inj.segments.map((seg) => seg.label), ['自述', '画像', '结论', '习惯'])
 assert.equal(inj.chars, inj.text.length, '字数要等于原文长度，别各算各的')
+const segSum = inj.segments.reduce((n, seg) => n + seg.chars, 0)
+assert.equal(segSum + inj.overhead, inj.chars, '四段字数 + 框架文字（标题/边界句/画像抬头）= 总字数')
 assert.ok(
   inj.segments.every((seg) => Array.isArray(seg.kept) && Array.isArray(seg.skipped)),
   '每段都要给出进了什么、挤掉什么',
