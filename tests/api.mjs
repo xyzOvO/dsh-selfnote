@@ -274,7 +274,7 @@ assert.equal(r.status, 403, 'README 里那个固定值不该再能进门')
 console.log('17. 跨站 Origin / 固定口令 → 403，真实 token + 同源 → 200')
 
 /* 18. 一条超长条目不该把整段预算挤空 */
-await call('POST', '/api/selfnote/note', { text: '长'.repeat(160) })
+await call('POST', '/api/selfnote/note', { text: '长'.repeat(400) })
 await call('POST', '/api/selfnote/note', { text: '短的一条要留下' })
 assert.match(injectionDef.text(), /短的一条要留下/)
 assert.equal(injectionDef.text().includes('长'.repeat(20)), false, '放不进预算的条目要跳过，不是把后面的一起丢掉')
@@ -344,7 +344,7 @@ console.log('24. 有会话解不开时报失败，不伪装成功')
 r = await call('GET', '/api/selfnote/state')
 const inj = r.payload.injection
 assert.ok(inj && typeof inj === 'object', 'state 里要有 injection')
-assert.equal(inj.limit, 460)
+assert.equal(inj.limit, 800)
 assert.deepEqual(inj.segments.map((seg) => seg.key), ['notes', 'guide', 'profile', 'env', 'facts', 'habits'])
 assert.deepEqual(inj.segments.map((seg) => seg.label), ['自述', '写自述的时机', '画像', '环境', '结论', '习惯'])
 assert.equal(inj.chars, inj.text.length, '字数要等于原文长度，别各算各的')
@@ -423,7 +423,7 @@ console.log('27. 心跳：注入一次就落一次盘')
 
 /* 29. 环境门牌句要报真数：门牌自己占字，加进去后可能又多挤掉几条 */
 {
-  const envRows = Array.from({ length: 6 }, (_, i) => ({
+  const envRows = Array.from({ length: 20 }, (_, i) => ({
     id: 'env-' + i,
     text: '环境事实第' + i + '条：' + 'x'.repeat(24),
     status: 'approved',
@@ -562,5 +562,65 @@ console.log('27. 心跳：注入一次就落一次盘')
   console.log('33. 设置页准入：脚本探测不算报警，页面被拒才响，且说得清原因')
 }
 
-console.log('\n36 项全部通过（data dir: ' + dir + '）')
+/* 34. 导出 / 导入：导出能带走，导入不覆盖、默认降级 */
+{
+  r = await call('GET', '/api/selfnote/export')
+  assert.equal(r.status, 200)
+  assert.equal(r.payload.app, 'dsh-selfnote')
+  assert.equal(r.payload.v, 1)
+  assert.equal(Array.isArray(r.payload.facts), true)
+  assert.equal(Array.isArray(r.payload.notes), true)
+  assert.equal(r.payload.config.halfLifeDays, 30)
+  const before = r.payload.counts.facts
+
+  // 造一份：一条同文本（该跳过）、一条新的 approved（默认该降成候选）、一条没 id（该算无效）
+  const existingText = r.payload.facts[0].text
+  const incoming = {
+    app: 'dsh-selfnote',
+    v: 1,
+    facts: [
+      { id: 'imp-1', text: existingText, status: 'approved' },
+      { id: 'imp-2', text: '导入进来的一条：以后先给结论', status: 'approved', source: 'other-machine#7' },
+      { id: '', text: '没有 id' },
+    ],
+    notes: [{ date: '2026-11-04', text: '从另一台机器带来的自述' }],
+    habits: [{ text: '导入的习惯', status: 'active' }],
+  }
+  r = await call('POST', '/api/selfnote/import', { bundle: incoming })
+  assert.equal(r.status, 200, JSON.stringify(r.payload))
+  assert.equal(r.payload.import.added.facts, 1, '只该进 imp-2')
+  assert.equal(r.payload.import.skipped.facts, 1, '同文本跳过')
+  assert.equal(r.payload.import.skipped.invalid, 1)
+  assert.equal(r.payload.import.demoted, 1, '默认把 approved 降成候选')
+  assert.equal(r.payload.import.added.notes, 1)
+  assert.equal(r.payload.import.added.habits, 1)
+  assert.equal(r.payload.import.indexStale, true, '导入后索引一定过期，要提示重建')
+
+  const imported = r.payload.facts.candidates.find((fact) => fact.id === 'imp-2')
+  assert.ok(imported, '导入的条目应当出现在候选里')
+  assert.equal(imported.status, 'candidate')
+  assert.equal(imported.importedFrom, 'other-machine#7')
+  assert.equal(r.payload.facts.approved.length + r.payload.facts.candidates.length + r.payload.facts.retired.length, before + 1)
+
+  // 勾了「保留原状态」才原样搬
+  const kept = {
+    app: 'dsh-selfnote',
+    v: 1,
+    facts: [{ id: 'imp-3', text: '这条要保留已采纳状态', status: 'approved' }],
+  }
+  r = await call('POST', '/api/selfnote/import', { bundle: kept, keepStatus: true })
+  assert.equal(r.payload.import.demoted, 0)
+  assert.ok(r.payload.facts.approved.some((fact) => fact.id === 'imp-3'), '勾了就该是已采纳')
+
+  // 坏文件：直接 400，别合并一半
+  const countBefore = r.payload.facts.approved.length + r.payload.facts.candidates.length + r.payload.facts.retired.length
+  r = await call('POST', '/api/selfnote/import', { bundle: { app: 'other', v: 1, facts: [] } })
+  assert.equal(r.status, 400)
+  assert.match(r.payload.error, /不是本插件导出的/)
+  r = await call('GET', '/api/selfnote/state')
+  assert.equal(r.payload.facts.approved.length + r.payload.facts.candidates.length + r.payload.facts.retired.length, countBefore, '被拒的导入不该落盘')
+  console.log('34. 导出 / 导入：不覆盖、默认降级、勾了才保留状态、坏文件 400 且不落盘')
+}
+
+console.log('\n37 项全部通过（data dir: ' + dir + '）')
 process.exit(0)

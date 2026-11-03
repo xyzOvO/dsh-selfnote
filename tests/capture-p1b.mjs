@@ -55,9 +55,9 @@ await Promise.all([
   capture.markSeenLocked('c', 1),
 ])
 const cursor = capture.readCursor()
-assert.equal(Number(cursor.a), 5)
-assert.equal(Number(cursor.b), 9)
-assert.equal(Number(cursor.c), 1)
+assert.equal(capture.cursorSeq(cursor, 'a'), 5)
+assert.equal(capture.cursorSeq(cursor, 'b'), 9)
+assert.equal(capture.cursorSeq(cursor, 'c'), 1)
 console.log('2. 跨会话并发写游标：三条都在')
 
 /* 3. seq 从 0 开始：第一条不能被当成「已处理」 */
@@ -101,7 +101,7 @@ console.log('6. 已采纳事实不被复制、不被改写')
 
 /* 7. 批量写入失败：不落半条、游标不前进 */
 facts = [{ id: 'f4', text: '以后回答要详细', status: 'candidate', evidence: ['z#1'] }]
-const seqBefore = Number(capture.readCursor().s4 ?? -1)
+const seqBefore = capture.cursorSeq(capture.readCursor(), 's4')
 let threw = false
 try {
   await run.handleEvent(userEvent('以后回答要简洁', 8), {
@@ -115,7 +115,7 @@ try {
   threw = true
 }
 assert.equal(threw, true, '写失败要抛给上层记日志')
-assert.equal(Number(capture.readCursor().s4 ?? -1), seqBefore, '写失败时游标不动')
+assert.equal(capture.cursorSeq(capture.readCursor(), 's4'), seqBefore, '写失败时游标不动')
 assert.equal(facts.length, 1, '没有留下半条冲突')
 console.log('7. 批量写失败：不留半条，游标不推进')
 
@@ -159,7 +159,7 @@ assert.equal(injected.handled, false)
 const chat = await run.handleEvent(userEvent('今天天气不错', 8), { sessionId: 's6', readFacts, writeFacts })
 assert.equal(chat.handled, false)
 assert.equal(facts.length, 0)
-assert.equal(Number(capture.readCursor().s6), 8, '没候选也要推进游标')
+assert.equal(capture.cursorSeq(capture.readCursor(), 's6'), 8, '没候选也要推进游标')
 console.log('10. 注入内容与闲聊都不采，但游标照常前进')
 
 /* 11. 并发乱序：seq=11 先处理完，seq=10 后到也不能被丢掉 */
@@ -174,7 +174,7 @@ assert.equal(earlyResult.handled, true, '后到的 seq=10 必须照样处理，�
 const texts = facts.map((fact) => fact.text)
 assert.ok(texts.some((t) => t.includes('英文')))
 assert.ok(texts.some((t) => t.includes('注释')))
-assert.equal(Number(capture.readCursor().s7), 11)
+assert.equal(capture.cursorSeq(capture.readCursor(), 's7'), 11)
 console.log('11. 同会话并发乱序：慢的那条不会被丢')
 
 /* 12. 真重放：seq 远落后于游标 → 直接跳过 */

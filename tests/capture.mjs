@@ -67,14 +67,14 @@ console.log('8. 过短过长都不收')
 assert.equal(capture.alreadySeen('s1', 10), false)
 capture.markSeen('s1', 10)
 assert.equal(capture.alreadySeen('s1', 10), true, '同一 seq 应当视为已处理')
-assert.equal(capture.alreadySeen('s1', 9), true, '更小的 seq 也是旧的')
+assert.equal(capture.alreadySeen('s1', 9), false, '9 落在空洞里 —— 从没处理过，迟到了也要处理')
 assert.equal(capture.alreadySeen('s1', 11), false, '新的 seq 应当处理')
 assert.equal(capture.alreadySeen('s2', 11), false, '不同会话互不影响')
 console.log('9. 游标按 seq 幂等，不同会话互不干扰')
 
 /* 10. 游标只前进，不回退 */
 capture.markSeen('s1', 5)
-assert.equal(Number(capture.readCursor().s1), 10, '旧 seq 不该把游标拉回去')
+assert.equal(capture.cursorSeq(capture.readCursor(), 's1'), 10, '旧 seq 不该把游标拉回去')
 console.log('10. 游标只前进')
 
 /* 11. 事件过滤：类型和 source.kind 两个都要满足 */
@@ -94,13 +94,13 @@ try {
   threw = true
 }
 assert.equal(threw, true, '写入失败应当抛出来，交给调用方记日志')
-assert.equal(capture.readCursor().s3, undefined, '写失败时游标不能动')
+assert.equal(capture.cursorSeq(capture.readCursor(), 's3'), -1, '写失败时游标不能动')
 console.log('12. 候选写失败 → 游标不前进')
 
 /* 13. 提交成功 → 游标前进，第二次同样 seq 直接跳过 */
 const okOne = await capture.commitObservation({ sessionId: 's3', seq: 7, text: 'x' }, () => 'written')
 assert.equal(okOne.skipped, null, '正常提交 skipped 为 null')
-assert.equal(Number(capture.readCursor().s3), 7)
+assert.equal(capture.cursorSeq(capture.readCursor(), 's3'), 7)
 const again = await capture.commitObservation({ sessionId: 's3', seq: 7, text: 'x' }, () => 'written')
 assert.equal(again.skipped, 'cursor', '重放同一条应当按游标跳过')
 console.log('13. 提交成功推进游标，重复提交跳过')
@@ -160,12 +160,12 @@ assert.equal(existsSync(corrupt.backup), true)
 console.log('19. 游标损坏：先备份再抛错')
 
 /* 20. commitObservation 传 facts 现读函数时，按 source 跳过且推进游标 */
-const beforeSeq = Number(capture.readCursor().s8 ?? 0)
+const beforeSeq = capture.cursorSeq(capture.readCursor(), 's8')
 const res = await capture.commitObservation({ sessionId: 's8', seq: beforeSeq + 5 }, () => 'should-not-run', {
   facts: () => [{ id: 'x', source: `s8#${beforeSeq + 5}`, status: 'candidate' }],
 })
 assert.equal(res.skipped, 'source')
-assert.equal(Number(capture.readCursor().s8), beforeSeq + 5)
+assert.equal(capture.cursorSeq(capture.readCursor(), 's8'), beforeSeq + 5)
 console.log('20. 写入路径自己接 source 去重')
 
 /* 21. 会话头判委派：实测据是 origin='subagent' / delegationDepth>0 */
@@ -176,5 +176,29 @@ assert.equal(capture.isDelegatedSession(undefined), false, '没有会话头不�
 assert.equal(capture.isDelegatedSession({ parentSession: 'x', delegationDepth: 0 }), false, '分叉会话仍然算本人的')
 console.log('21. 委派会话按会话头识别，不看正文标记')
 
-console.log('\n22 项全部通过')
+/* 22. 迟到的消息不再被吞：seq 跳号会把中间的记成空洞，迟到时照样处理 */
+capture.markSeen('h1', 50)
+capture.markSeen('h1', 100)
+assert.equal(capture.alreadySeen('h1', 100), true, '刚处理的那条算处理过')
+assert.equal(capture.alreadySeen('h1', 99), false, '99 夹在 50 与 100 之间，从没到过，是空洞，要处理')
+assert.equal(capture.alreadySeen('h1', 5), false, '第一次见到这个会话时，之前的 seq 都算没处理过')
+capture.markSeen('h1', 99)
+assert.equal(capture.alreadySeen('h1', 99), true, '补上之后就算处理过')
+assert.equal(capture.cursorSeq(capture.readCursor(), 'h1'), 100, '补空洞不拉低高水位')
+console.log('22. 迟到的事件落在空洞里 → 照样处理，补完才划掉')
+
+/* 23. 旧格式（只有一个整数）仍然认，语义按老规矩：≤ 高水位的都算处理过 */
+assert.equal(capture.alreadySeen('h2', 12, { h2: 12 }), true)
+assert.equal(capture.alreadySeen('h2', 11, { h2: 12 }), true, '旧格式没法知道空洞，只能保守跳过')
+assert.equal(capture.alreadySeen('h2', 13, { h2: 12 }), false)
+console.log('23. 旧游标文件不用迁移也能读')
+
+/* 24. 空洞有上限：跳 8000 个号也不会把游标记爆，超出的当作没处理过 */
+capture.markSeen('h3', 8000)
+const holes = capture.cursorHoles(capture.readCursor(), 'h3')
+assert.equal(holes <= capture.HOLE_WINDOW, true, '空洞数必须被窗口夹住：' + holes)
+assert.equal(capture.alreadySeen('h3', 7999), false, '最近的空洞留着')
+console.log('24. 空洞最多留 ' + capture.HOLE_WINDOW + ' 个，实际 ' + holes + ' 个')
+
+console.log('\n25 项全部通过')
 process.exit(0)
