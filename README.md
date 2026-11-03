@@ -185,6 +185,7 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 你说话时插件顺手看一眼：有没有「对 AI 的长期要求」——以后…、不要…、我更喜欢…、你刚才说错了…。
 
 - **只收你亲手打的字**：事件类型必须是 `user/message`，且 `source.kind === 'user'`；注入内容、模型自述、工具输出一律不收。
+- **委派会话整场不采**：子代理会话里的 `user/message` 也是 `kind: 'user'`（宿主只区分 user / model / tool / system-prompt，分不出「委派」），但那是父 agent 写的任务书。所以按会话头判断：`origin === 'subagent'` 或 `delegationDepth > 0` 就整场跳过 —— 用会话粒度，不靠正文标记。
 - **两道门槛**：「我以后再也不熬夜了」不采（范围不对），「以后回答先给结论」采。
 - **产出一律是候选**，永远进不了 `approved`。
 - **冲突不合并**：两条各自留原文与出处，双向 `similarTo` 互指；已采纳的只被指向、不被改写。

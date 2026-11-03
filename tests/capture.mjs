@@ -162,5 +162,13 @@ assert.equal(res.skipped, 'source')
 assert.equal(Number(capture.readCursor().s8), beforeSeq + 5)
 console.log('20. 写入路径自己接 source 去重')
 
-console.log('\n20 项全部通过')
+/* 21. 会话头判委派：实测据是 origin='subagent' / delegationDepth>0 */
+assert.equal(capture.isDelegatedSession({ origin: 'subagent', delegationDepth: 1 }), true, '子代理会话')
+assert.equal(capture.isDelegatedSession({ delegationDepth: 2 }), true, '嵌套委派也算')
+assert.equal(capture.isDelegatedSession({ delegationDepth: 0 }), false, '真人会话')
+assert.equal(capture.isDelegatedSession(undefined), false, '没有会话头不拦')
+assert.equal(capture.isDelegatedSession({ parentSession: 'x', delegationDepth: 0 }), false, '分叉会话仍然算本人的')
+console.log('21. 委派会话按会话头识别，不看正文标记')
+
+console.log('\n21 项全部通过')
 process.exit(0)

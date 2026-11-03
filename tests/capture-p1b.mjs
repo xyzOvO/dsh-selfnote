@@ -184,5 +184,20 @@ const stale = await run.handleEvent(userEvent('以后回答都用中文', 400), 
 assert.equal(stale.handled, false)
 assert.equal(stale.reason, 'cursor')
 console.log('12. 明显落后的重放仍然跳过')
-console.log('\n12 组断言全部通过（data dir: ' + dir + '）')
+
+/* 13. 委派会话：user/message + kind=user，但不是这个人说的，一律不采 */
+facts = []
+const delegatedEvent = userEvent('以后回答先给结论', 9)
+const delegated = await run.handleEvent(delegatedEvent, { sessionId: 's8', delegated: true, readFacts, writeFacts })
+assert.equal(delegated.handled, false)
+assert.equal(delegated.reason, 'delegated-session')
+assert.equal(facts.length, 0, '委派会话不许产出候选')
+console.log('13. 委派会话整场跳过，游标也不推进')
+
+/* 14. 同一个事件，非委派会话照常采（证明挡的是会话不是内容） */
+const normal = await run.handleEvent(userEvent('以后回答先给结论', 9), { sessionId: 's9', delegated: false, readFacts, writeFacts })
+assert.equal(normal.handled, true)
+assert.equal(facts.length, 1)
+console.log('14. 同样的正文，真人会话照常采')
+console.log(String.fromCharCode(10) + '14 组断言全部通过（data dir: ' + dir + '）')
 process.exit(0)
