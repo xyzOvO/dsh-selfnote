@@ -126,6 +126,12 @@ for (const id of profileNow.sources) {
 }
 console.log('10. 画像吸收过的事实不再重复（' + profileNow.sources.length + ' 条各出现一次）')
 
+/* 10b. 被画像吸收的条目同样要记账：它确实贴进了提示词，只是没走结论段。
+   漏记的话，设置页会把一条天天在用的记忆显示成「0 次 / 从没进过」。 */
+const absorbed = memory.listFacts().find((item) => item.id === profileNow.sources[0])
+assert.ok((absorbed.hitCount ?? 0) > 0, '画像段里用过的那条应当有 hitCount，实际 ' + absorbed.hitCount)
+console.log('10b. 画像吸收的条目也算「进过上下文」（hitCount=' + absorbed.hitCount + '）')
+
 /* 11. 事实全部退役 → 画像为空（不残留旧文本） */
 for (const item of memory.listFacts('approved')) memory.setFactStatus(item.id, 'retired')
 assert.equal(buildProfile(memory.listFacts(), { maxChars: 120 }).text, '')

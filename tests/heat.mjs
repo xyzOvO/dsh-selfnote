@@ -62,9 +62,11 @@ writeFileSync(
 assert.equal(memory.touchFacts(['f1'], now), 1, '第一次应当记一次')
 const afterFirst = memory.readFacts().find((fact) => fact.id === 'f1')
 assert.equal(afterFirst.hitCount, 1)
-assert.equal(afterFirst.lastHit, '2026-11-03')
+assert.equal(afterFirst.lastHit, '2026-11-03T00:00:00.000Z', 'lastHit 要存完整时刻：只存日期的话 Date.parse 得到当天 00:00，一小时的去重窗口就废了')
 assert.equal(memory.touchFacts(['f1'], now + 60 * 1000), 0, '一小时内不重复记')
-assert.equal(memory.touchFacts(['f2'], now + 2 * 60 * 60 * 1000), 1, '过了一小时可以再记')
+assert.equal(memory.touchFacts(['f1'], now + 59 * 60 * 1000), 0, '59 分钟仍在窗口内')
+assert.equal(memory.touchFacts(['f1'], now + 61 * 60 * 1000), 1, '过了一小时可以再记（同一天里也该能再涨）')
+assert.equal(memory.touchFacts(['f2'], now + 2 * 60 * 60 * 1000), 1, '另一条独立计数')
 console.log('5. touchFacts 记数并节流')
 
 /* 6. 冷下去不自动退役 */
@@ -102,5 +104,14 @@ assert.ok(hotAfter.hitCount >= 6, '进过注入的事实应当涨热度，实际
 assert.equal(memory.readFacts().find((fact) => fact.id === 'cold1').hitCount, undefined, '没进注入的没涨')
 console.log('8. 只有真的进上下文才记一次使用')
 
-console.log('\n8 项全部通过')
+/* 9. 重复装配不重复记账：缓存键不能被自己刚写过的 facts.jsonl 作废，
+   否则「每装配一次就 +1」会滚成几千次（0.12.1 修的就是这个）。 */
+const afterFirstInject = memory.readFacts().find((fact) => fact.id === 'hot1').hitCount
+captured.contexts[0].text()
+captured.contexts[0].text()
+const afterRepeat = memory.readFacts().find((fact) => fact.id === 'hot1').hitCount
+assert.equal(afterRepeat, afterFirstInject, '同一份数据连续装配不该再涨（' + afterFirstInject + ' → ' + afterRepeat + '）')
+console.log('9. 重复装配不重复记账')
+
+console.log('\n9 项全部通过')
 process.exit(0)
