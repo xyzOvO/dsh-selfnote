@@ -48,7 +48,7 @@ apply(ctx, {})
 
 assert.ok(handler, '没有注册 /api/selfnote 路由')
 const toolNames = toolHold.map((tool) => tool.name)
-assert.deepEqual(toolNames, ['self_note', 'memory_recall', 'memory_stage'])
+assert.deepEqual(toolNames, ['self_note', 'memory_recall', 'memory_stage', 'memory_search', 'memory_write'])
 assert.equal(toolHold[0].output.render({}, { action: 'stats', entries: 0, chars: 0, maxChars: 1, maxEntries: 1, archiveFiles: 0 })[0].type, 'text')
 assert.equal(toolHold[1].output.render({}, { query: 'x', raw: { total: 0 } })[0].type, 'text')
 
@@ -349,5 +349,13 @@ assert.equal(r.payload.level, 'error', '有坏行就要报 error')
 assert.match(r.payload.checks.find((item) => item.key === 'facts').detail, /解析不出来/)
 console.log('26. 体检：五项各有判据，坏行会被抓出来')
 
-console.log('\n27 项全部通过（data dir: ' + dir + '）')
+/* 27. 心跳：注入真的跑过才写。只读不写的状态文件等于没有状态 */
+injectionDef.text()
+r = await call('GET', '/api/selfnote/state')
+assert.equal(r.payload.heartbeat.present, true, '注入跑过就该有心跳')
+assert.ok(r.payload.heartbeat.injections >= 1)
+assert.ok(r.payload.warm && typeof r.payload.warm.total === 'number', 'state 里要有温层统计')
+console.log('27. 心跳：注入一次就落一次盘')
+
+console.log('\n28 项全部通过（data dir: ' + dir + '）')
 process.exit(0)
