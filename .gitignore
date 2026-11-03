@@ -7,3 +7,6 @@ node_modules/
 *.local.json
 memory/
 cache/
+
+# 发布时用的本地 npm 缓存
+.npm-cache/
