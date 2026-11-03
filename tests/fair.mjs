@@ -105,5 +105,26 @@ const afterOnce = s1.text()
 assert.equal(overlap(markerOf(afterOnce), injectedBefore).length, 0, '补偿只该发生一轮，之后回到常态')
 console.log('4. 补偿只补一轮')
 
-console.log('\n4 项全部通过')
+/* 5. 会话记录 id 与 header.id 不一致时也要认得出是同一个会话
+   换个前缀重做一遍 3 号场景：压缩事件带的 id 是别的值，header.id 才是这个会话。 */
+const markerOf5 = (text) => [0, 1, 2, 3, 4, 5].filter((i) => text.includes('第五' + i + '说'))
+writeEnvFacts(Array.from({ length: 6 }, (_, i) => ({ id: 'k' + i, text: pad('第五' + i), hitCount: 8, lastHit: '2026-11-03T05:00:00Z' })))
+const s5 = boot('s5')
+const injected5 = markerOf5(s5.text())
+assert.ok(injected5.length > 0, '先得真的有条目进过注入')
+writeEnvFacts([
+  ...memory.readFacts(),
+  ...Array.from({ length: 8 }, (_, i) => ({ id: 'n5' + i, text: pad('五批新' + i), hitCount: 20, lastHit: '2026-11-04T05:00:00Z' })),
+])
+const squeezed5 = markerOf5(boot('s6').text())
+assert.ok(squeezed5.length < injected5.length, '新条目进来后旧条目该被挤掉（' + JSON.stringify(squeezed5) + ' < ' + JSON.stringify(injected5) + '）')
+s5.on['session/event']({ id: 's5-alias', header: { id: 's5' } }, { type: 'compaction/summary', data: {} })
+const restored5 = markerOf5(s5.text())
+assert.ok(
+  overlap(restored5, injected5).length > overlap(squeezed5, injected5).length,
+  '按另一个 id + header.id 收到压缩事件时，也该补回同一个会话用过的条目（' + JSON.stringify(restored5) + '）',
+)
+console.log('5. 记录 id 与 header.id 不同也认得（补回 ' + JSON.stringify(overlap(restored5, injected5)) + '）')
+
+console.log('\n5 项全部通过')
 process.exit(0)
