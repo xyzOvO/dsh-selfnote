@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.10.2-4f46e5" alt="version">
+  <img src="https://img.shields.io/badge/version-0.10.3-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
   <img src="https://img.shields.io/badge/tests-146%20passed-0ea5e9" alt="tests">
@@ -143,6 +143,8 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 
 解不开的会话也不会被当成空会话：`parseSession` 会如实标记失败，这类会话不进磁盘缓存 —— 否则缓存一写，下次就照着「空会话」返回，问题永久藏起来。
 
+**只落后几个会话时，就地补上再查**（`topUpIndex`，0.10.3）。会话只要被追加过、又冷过 5 分钟，整份索引就会被判过期 —— 而现实里落后的一般就是当前这一两个会话。原来是掉头去线性扫描，等于「聊完一轮过五分钟，索引恰好在你最想查的时候失效」。现在把落后的那几个会话现解析进内存索引（不写盘），查完就丢；落后超过 20 个才真退回线性扫描。命中提示里会写「索引落后 N 个会话，已就地补上」，不假装是完整的。
+
 ### 增量解析：只解新加的那一句
 
 DSH 的会话文件是**逐条追写**的 zstd 序列（一次写入 = 一个 frame）。老做法是每次查记忆都把整份 14 MB 的文件重新解一遍 —— 长会话越聊越慢。
@@ -245,7 +247,7 @@ DSH 的会话文件是**逐条追写**的 zstd 序列（一次写入 = 一个 fr
 
 ### 抬头：只留必要的三十个字
 
-注入文本里有几处纯框架文字（标题行、边界句、段名前缀），不承载任何记忆。0.10.2 之前它们合计 **92 字**，等于 460 的预算里有 20% 花在说「下面是什么」上。现在：
+注入文本里有几处纯框架文字（标题行、边界句、段名前缀），不承载任何记忆。0.10.3 之前它们合计 **92 字**，等于 460 的预算里有 20% 花在说「下面是什么」上。现在：
 
 ```
 记忆（我写的）

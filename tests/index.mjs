@@ -150,5 +150,36 @@ assert.equal(multi.records.length, 2, '多 frame 文件应该解出 2 条')
 assert.match(multi.records[1].text, /第二帧/)
 console.log('11. 多 frame zstd 能整块解出来（' + multi.records.length + ' 条）')
 
-console.log('\n12 项全部通过')
+// 12. 索引只落后一两个会话时，topUp 就地补上，不用整份重建
+{
+  const built = store.buildIndex()
+  const target = memory.listSessions().find((session) => session.id === 'session-bbb')
+  // 模拟「会话被追加过」：内容换一份、mtime 变新
+  writeSession('proj', 'session-bbb', [
+    userMessage(1, 1762100000000, '记忆插件要能带出处，不然没法验证。'),
+    userMessage(2, 1762100100000, '后补的一句：出处要能点回去看原文。'),
+  ])
+  const bumped = memory.listSessions().find((session) => session.id === 'session-bbb')
+  assert.notEqual(bumped.mtime, target.mtime, 'mtime 应该变了')
+  // 5 分钟内写的会话算「热」，不参与过期判断 —— 要验证的是「冷下来之后」，所以把 mtime 拨回十分钟前
+  const old = new Date(Date.now() - 10 * 60 * 1000)
+  utimesSync(bumped.file, old, old)
+  assert.equal(store.freshnessOfSessions(built.sessions, memory.listSessions()).fresh, false, '这时整份索引是过期的')
+
+  const topped = store.topUpIndex(built, memory.listSessions())
+  assert.notEqual(topped.index, null, '只落后一个会话，应该能就地补')
+  assert.equal(topped.gaps, 1)
+  const found = store.queryIndex(topped.index, store.indexTerms('点回去'))
+  assert.ok(found.ids.length > 0, '补上之后新增的句子要能命中')
+  assert.equal(memory.recall('点回去', { mode: 'raw', ids: store.hitKeys(topped.index, found.ids) }).raw.total, 1)
+
+  // 落后超过阈值就不硬撑，交给线性扫描
+  const many = memory.listSessions().concat(
+    Array.from({ length: 25 }, (_, i) => ({ id: 'ghost-' + i, project: 'proj', file: 'x', mtime: 1 })),
+  )
+  assert.equal(store.topUpIndex(built, many, { maxMissing: 20 }).index, null, '落后太多要放弃')
+}
+console.log('12. 索引只落后几个会话时就地补上，落后太多就退回线性扫描')
+
+console.log('\n13 项全部通过')
 process.exit(0)

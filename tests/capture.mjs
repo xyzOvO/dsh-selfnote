@@ -111,6 +111,12 @@ assert.equal(capture.alreadyCaptured(facts, 's3#7'), true)
 assert.equal(capture.alreadyCaptured(facts, 's3#8'), false)
 console.log('14. 重放时按 source 兜底去重')
 
+/* 14b. 合并过的条目：source 还停在第一次，靠 evidence 认出来 */
+const mergedFact = [{ id: 'b', source: 's4#1', evidence: ['s4#1', 's4#9'], occurrences: 2, status: 'candidate' }]
+assert.equal(capture.alreadyCaptured(mergedFact, 's4#9'), true, '合并追加的那次也要算已采集')
+assert.equal(capture.alreadyCaptured(mergedFact, 's4#10'), false)
+console.log('14b. 合并只追加 evidence 时，重放不会再涨 occurrences')
+
 /* 15. 采集门槛：有时间持续但不是给我的要求 → 不采 */
 assert.deepEqual(capture.candidatesOf('我以后再也不熬夜了。'), [])
 assert.deepEqual(capture.candidatesOf('我以后都不吃辣了。'), [])
@@ -170,5 +176,5 @@ assert.equal(capture.isDelegatedSession(undefined), false, '没有会话头不�
 assert.equal(capture.isDelegatedSession({ parentSession: 'x', delegationDepth: 0 }), false, '分叉会话仍然算本人的')
 console.log('21. 委派会话按会话头识别，不看正文标记')
 
-console.log('\n21 项全部通过')
+console.log('\n22 项全部通过')
 process.exit(0)

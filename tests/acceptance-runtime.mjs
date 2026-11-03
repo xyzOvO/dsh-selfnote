@@ -64,11 +64,41 @@ async function hit(path, init = {}) {
   return { status: response.status, body }
 }
 
-// 1a. 没有准入头 —— 相当于另一个网页/外部脚本直接打过来
+// fetch 不允许改 Host（forbidden header），伪造 Host 只能用底层 http 请求
+async function hitWithHost(path, hostValue) {
+  const http = await import('node:http')
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      { host: '127.0.0.1', port, path: '/api/selfnote' + path, headers: { Host: hostValue } },
+      (res) => {
+        let data = ''
+        res.setEncoding('utf8')
+        res.on('data', (chunk) => {
+          data += chunk
+        })
+        res.on('end', () => resolve({ status: res.statusCode, body: data }))
+      },
+    )
+    req.on('error', reject)
+    req.end()
+  })
+}
+
+// 1a. 桌面壳的页面请求不带准入头（3c4ae7e 之后的策略：token 可选）
+//     但 Host 必须回环 —— 别的机器/域名解析过来打不到这里
 let r = await hit('/state')
-assert.equal(r.status, 403, '没有 x-selfnote 头必须拒绝')
-assert.equal(r.body.ok, false)
-console.log('1. 不带 x-selfnote 头 → 403')
+assert.equal(r.status, 200, '回环 + 无头 = 放行（桌面壳就是这样调的）')
+console.log('1. 回环、不带 x-selfnote 头 → 200（页面形态）')
+
+// 1a'. 伪造 Host（DNS 重绑定）：即使本机发起也必须拒
+const evil = await hitWithHost('/state', 'evil.example')
+assert.equal(evil.status, 403, '非回环 Host 必须拒绝')
+console.log('1c. 伪造 Host → 403（挡住 DNS 重绑定）')
+
+// 1a''. 带了头但值是错的：说明有人在猜
+r = await hit('/state', { headers: { 'x-selfnote': 'not-the-token' } })
+assert.equal(r.status, 403, '错误的 x-selfnote 值必须拒绝')
+console.log('1b. 错的 x-selfnote 值 → 403')
 
 // 1b. 带上准入头 —— 相当于设置页自己
 r = await hit('/state', { headers: { 'x-selfnote': token } })
@@ -212,7 +242,7 @@ console.log('11. 目录里没有残留临时文件或锁')
 /* ------------------------------ 3. 注入预算 ------------------------------ */
 
 const { writeNotes } = await import('../lib/store.js')
-const longNote = '长'.repeat(130)
+const longNote = '长'.repeat(400)
 writeNotes([{ text: longNote, date: '2026-11-03' }, { text: '短的一条要留下', date: '2026-11-03' }])
 
 const text = injectionDef.text()
