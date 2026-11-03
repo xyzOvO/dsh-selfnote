@@ -328,7 +328,26 @@ assert.ok(
   inj.segments.every((seg) => Array.isArray(seg.kept) && Array.isArray(seg.skipped)),
   '每段都要给出进了什么、挤掉什么',
 )
-console.log('25. 注入快照：四段结构、字数与原文一致')
+console.log('25. 注入快照：五段结构、字数与原文一致')
 
-console.log('\n26 项全部通过（data dir: ' + dir + '）')
+/* 26. 体检：五项都要有明确结论，不许只说「看起来正常」 */
+r = await call('GET', '/api/selfnote/doctor')
+assert.equal(r.status, 200)
+const doc = r.payload
+assert.equal(typeof doc.ok, 'boolean')
+assert.ok(['ok', 'warn', 'error'].includes(doc.level), '整体要有分级')
+for (const key of ['index', 'capture', 'facts', 'notes', 'auth']) {
+  const check = doc.checks.find((item) => item.key === key)
+  assert.ok(check, '缺了 ' + key + ' 这项')
+  assert.ok(['ok', 'warn', 'error'].includes(check.level), key + ' 要有分级')
+  assert.ok(String(check.detail).length > 0, key + ' 要写清为什么')
+}
+/* 塞一行坏 JSON，体检必须报出来 —— 这条记忆读不到，而且平时是静默的 */
+writeFileSync(factsFile, readFileSync(factsFile, 'utf8') + '{"id":"broken",\n')
+r = await call('GET', '/api/selfnote/doctor')
+assert.equal(r.payload.level, 'error', '有坏行就要报 error')
+assert.match(r.payload.checks.find((item) => item.key === 'facts').detail, /解析不出来/)
+console.log('26. 体检：五项各有判据，坏行会被抓出来')
+
+console.log('\n27 项全部通过（data dir: ' + dir + '）')
 process.exit(0)
