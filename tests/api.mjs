@@ -328,7 +328,9 @@ assert.ok(
   inj.segments.every((seg) => Array.isArray(seg.kept) && Array.isArray(seg.skipped)),
   '每段都要给出进了什么、挤掉什么',
 )
-console.log('25. 注入快照：五段结构、字数与原文一致')
+// 抬头是纯框架文字，不承载任何记忆。它要是长回去（曾经 92 字，占掉 20% 预算），这条会先响
+assert.ok(inj.overhead <= 40, '抬头要短，实测 ' + inj.overhead + ' 字')
+console.log('25. 注入快照：五段结构、字数与原文一致，抬头 ' + inj.overhead + ' 字')
 
 /* 26. 体检：五项都要有明确结论，不许只说「看起来正常」 */
 r = await call('GET', '/api/selfnote/doctor')
@@ -385,5 +387,24 @@ console.log('27. 心跳：注入一次就落一次盘')
   console.log('28. 注入归属：在用 / 静默 / 从没进过 三种状态都算对')
 }
 
-console.log('\n29 项全部通过（data dir: ' + dir + '）')
+/* 29. 环境门牌句要报真数：门牌自己占字，加进去后可能又多挤掉几条 */
+{
+  const envRows = Array.from({ length: 6 }, (_, i) => ({
+    id: 'env-' + i,
+    text: '环境事实第' + i + '条：' + 'x'.repeat(24),
+    status: 'approved',
+    channel: 'env',
+  }))
+  writeFileSync(factsFile, envRows.map((row) => JSON.stringify(row)).join('\n') + '\n')
+
+  r = await call('GET', '/api/selfnote/state')
+  const envSeg = r.payload.injection.segments.find((seg) => seg.key === 'env')
+  const pointed = r.payload.injection.text.match(/另有 (\d+) 条环境备忘/)
+  assert.ok(pointed, '放不下时要留一句门牌，别假装没有')
+  assert.ok(envSeg.skipped.length > 0, '这组数据本来就该放不下')
+  assert.equal(Number(pointed[1]), envSeg.skipped.length, '门牌上写的条数要等于实际被挤掉的条数')
+  console.log('29. 环境门牌：另有 N 条里的 N 是真数')
+}
+
+console.log('\n30 项全部通过（data dir: ' + dir + '）')
 process.exit(0)

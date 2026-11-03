@@ -61,7 +61,7 @@ check('条数被裁到上限内', st.entries <= 4, `entries=${st.entries}`)
 check('产生了归档', st.archiveFiles >= 1, `archiveFiles=${st.archiveFiles}`)
 
 const text = inject()
-check('注入内容非空', text.startsWith('关于我自己'))
+check('注入内容非空', text.startsWith('记忆（我写的）'))
 check('注入长度受控', text.length <= 120 + 40, `len=${text.length}`)
 
 const read = await tool.execute({ action: 'read' })

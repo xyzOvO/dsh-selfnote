@@ -92,7 +92,7 @@ const inject = captured.contexts[0].text
 
 /* 6. 默认开启：注入里出现「关于你」段 */
 const withProfile = inject()
-assert.match(withProfile, /关于你（从已采纳记忆聚合，不是新事实）：/)
+assert.match(withProfile, /关于他：/)
 assert.match(withProfile, /作息：/)
 console.log('6. 注入里出现画像段')
 
@@ -100,7 +100,7 @@ console.log('6. 注入里出现画像段')
 const { writeConfig, readConfig } = await import('../lib/store.js')
 writeConfig({ ...readConfig(), profileOverride: '他喜欢短句、先结论。' })
 const overridden = inject()
-assert.match(overridden, /关于你（从已采纳记忆聚合，不是新事实）：他喜欢短句、先结论。/)
+assert.match(overridden, /关于他：他喜欢短句、先结论。/)
 assert.ok(!overridden.includes('作息：'), '手改后不该再拼聚合结果')
 console.log('7. 手改覆盖生效，且不叠加聚合结果')
 
@@ -112,7 +112,7 @@ console.log('8. 关闭后画像段消失')
 
 /* 9. 重新打开，恢复聚合 */
 writeConfig({ ...readConfig(), profileEnabled: true })
-assert.match(inject(), /关于你（从已采纳记忆聚合，不是新事实）：/)
+assert.match(inject(), /关于他：/)
 console.log('9. 重新打开后恢复')
 
 /* 10. 去重：被画像吸收的事实不再在「常驻结论」段重复 */
