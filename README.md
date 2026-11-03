@@ -252,6 +252,29 @@ DSH 的会话文件是**逐条追写**的 zstd 序列（一次写入 = 一个 fr
 - **采纳 / 退役都要人点**：出现次数再多也不会自动采纳；退役的事实不会因为新候选出现就自己复活。
 - **留痕**：每次改状态记下时间、从哪改的（`via: settings`）、前后状态（`history`），事后可查。
 
+### 候选为空时，怎么知道它到底有没有在听
+
+`GET /api/selfnote/capture` 是这块的诊断口（要带 `x-selfnote` 头，值见 `~/.dsh/selfnote/auth-token`）：
+
+```json
+{
+  "since": "2026-11-04T07:31:02.114Z",
+  "events": 160,
+  "types": { "user/message": 12, "job/registered": 40, "turn/ended": 108 },
+  "reasons": { "written": 1, "no-candidate": 11, "not-user-authored": 148 },
+  "candidates": 1,
+  "written": 1,
+  "lastType": "turn/ended",
+  "trace": [{ "at": "…", "sid": "session-", "type": "user/message", "seq": 91, "reason": "no-candidate" }]
+}
+```
+
+- `types` 是事件类型直方图：`user/message` 在涨，说明**你的话真的进来了**；不涨才是链路断了。
+- `reasons` 是每一条的最后落点：`written` 写出了候选、`no-candidate` 过了人审但没命中触发词、`not-user-authored` 不是人打的、`no-session` 没有会话 id、`error` 采集抛错。
+- `trace` 保留最近 40 条，带时间、会话前缀、seq 和落点。
+
+候选区空着有两种情况，这里能分开：**没在听**（`types` 里没有 `user/message`）和**在听但没话可采**（`no-candidate` 在涨）。这两个计数是 0.13.2 才补的 —— 上一版有两个计数器声明了从来没人加一，读出来永远 0，排查时反而把结论带偏。
+
 ## 注入预算
 
 每回合五段，合计 800 字（自述占最大一份）：
