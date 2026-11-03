@@ -287,6 +287,52 @@ assert.ok(!json.includes('undefined'), '归属卡不该出现 undefined')
 forcedTab = null
 console.log('9. 归属卡区分「只搜到过」与「从没进过」')
 
-console.log('\n9 项全部通过')
+/* 10. 自述页：每一条都能就地改、就地删 —— 这是「注入改不掉」那个 bug 的正面 */
+const twoNotes = {
+  ...base,
+  facts: { candidates: [], approved: [], retired: 0 },
+  habits: [{ text: '先跑测试再交付', tag: '工作', status: 'active', created: '2026-11-02' }],
+  notes: [
+    { date: '2026-11-01', text: '早一点的这条' },
+    { date: '2026-11-03', text: '最新的这条' },
+  ],
+}
+forcedTab = 'notes'
+tree = render(twoNotes)
+json = JSON.stringify(tree)
+nodes = collect(tree)
+assert.match(json, /sn-panel-notes/, '切到自述页要渲染自述面板')
+assert.ok(json.includes('早一点的这条') && json.includes('最新的这条'), '两条都要显示')
+assert.ok(
+  json.indexOf('最新的这条') < json.indexOf('早一点的这条'),
+  '显示要最新的在前（存储是从旧到新，渲染得反过来）'
+)
+const rowActions = nodes.filter((node) => node.props && /sn-row-actions/.test(node.props.className || ''))
+assert.equal(rowActions.length, 2, '两条自述各有一组行内操作')
+const actionLabels = rowActions.map((node) => node.children.map((kid) => (kid && kid.children ? kid.children[0] : '')).join('/'))
+assert.deepEqual(actionLabels, ['改/删', '改/删'], '每行都该有「改」和「删」两个按钮')
+const actionButtons = rowActions.flatMap((node) => node.children)
+assert.ok(
+  actionButtons.every((node) => node.type === 'button' && typeof node.props.onClick === 'function'),
+  '行内操作要是真按钮，并且真的挂了点击处理'
+)
+assert.ok(json.includes('改完/删完下一回合生效'), '要说明改完什么时候生效')
+assert.ok(!json.includes('undefined'), '自述页不该出现 undefined')
+forcedTab = null
+console.log('10. 自述页：每条都能就地改/删，最新的排在前面')
+
+/* 11. 已生效的习惯能看见、能撤销 —— 以前只给了「升成习惯」，升上去就下不来 */
+forcedTab = 'memory'
+tree = render(twoNotes)
+json = JSON.stringify(tree)
+assert.match(json, /sn-panel-memory/, '切到记忆页要渲染记忆面板')
+assert.ok(json.includes('先跑测试再交付'), '已生效的习惯要列出来，不能升完就看不见')
+assert.ok(json.includes('撤销'), '要有撤销按钮，否则习惯只能加不能减')
+assert.ok(json.includes('不再是习惯，标签和记忆都还在'), '撤销的后果要写清楚，别让人以为是删标签')
+assert.ok(!json.includes('undefined'), '习惯区不该出现 undefined')
+forcedTab = null
+console.log('11. 已生效的习惯能看见、能撤销')
+
+console.log('\n11 项全部通过')
 
 process.exit(0)

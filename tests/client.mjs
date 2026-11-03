@@ -86,7 +86,7 @@ const slot = registered[0]
 assert.equal(slot.meta.name, 'settings.section')
 assert.equal(slot.meta.id, 'selfnote')
 assert.equal(slot.meta.order, 48)
-assert.equal(slot.meta.label(), '自我叙述')
+assert.equal(slot.meta.label(), '人格（自述）')
 assert.equal(typeof slot.Component, 'function')
 
 /* ---------- CSS ---------- */

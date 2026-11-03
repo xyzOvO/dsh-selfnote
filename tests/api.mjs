@@ -231,7 +231,15 @@ assert.equal(r.status, 200)
 assert.equal(r.payload.habits.length, 1)
 assert.match(injectionDef.text(), /回答先给结论/)
 assert.ok(r.payload.budget.total <= r.payload.budget.limit)
-console.log('13. 习惯升上去后进注入，且总预算没超')
+// 撤销：以前设置页只给了「升成习惯」，升上去就下不来，界面里也看不见它
+r = await call('POST', '/api/selfnote/habit', { text: '回答先给结论', status: 'retired' })
+assert.equal(r.status, 200, JSON.stringify(r.payload))
+assert.equal(r.payload.habits.length, 0, '撤销后不再是习惯')
+assert.equal(injectionDef.text().includes('· 回答先给结论'), false, '撤销后要从注入的习惯段消失')
+r = await call('POST', '/api/selfnote/habit', { text: '回答先给结论', status: 'active' })
+assert.equal(r.payload.habits.length, 1, '还能再升回来')
+console.log('13. 习惯升上去进注入、能撤销、能再升回来')
+
 
 /* 14. 退役后立刻从注入里消失 */
 r = await call('POST', '/api/selfnote/fact', { id: staged.fact.id, status: 'retired' })
@@ -626,5 +634,90 @@ console.log('27. 心跳：注入一次就落一次盘')
   console.log('34. 导出 / 导入：不覆盖、默认降级、勾了才保留状态、坏文件 400 且不落盘')
 }
 
-console.log('\n37 项全部通过（data dir: ' + dir + '）')
+/* 35. 改一条 / 删一条：注入里那句话能改，不用整份清空重写 */
+{
+  r = await call('GET', '/api/selfnote/state')
+  const before35 = r.payload.notes
+  assert.ok(before35.length >= 2, '前面该已经写过几条，才谈得上改')
+  const at = before35.length - 1
+  const oldText = before35[at].text
+  const injBefore = injectionDef.text()
+  assert.ok(injBefore.includes(oldText.slice(0, 6)), '改之前，旧的那句该在真实注入里（走缓存那条路）')
+
+  r = await call('POST', '/api/selfnote/note/update', { index: at, text: '改过的一条：先跑验收再交付' })
+  assert.equal(r.status, 200, JSON.stringify(r.payload))
+  assert.equal(r.payload.notes.length, before35.length, '改一条不该改变条数')
+  assert.equal(r.payload.notes[at].text, '改过的一条：先跑验收再交付')
+  assert.equal(r.payload.notes[at].date, before35[at].date, '改措辞不该把日期改成今天')
+  assert.equal(r.payload.notes.some((item) => item.text === oldText), false, '旧文本该没了')
+  const noteSeg = r.payload.injection.segments.find((seg) => seg.key === 'notes')
+  assert.ok(noteSeg.kept.includes('改过的一条：先跑验收再交付'), '改完必须立刻反映到这一回合的注入段')
+  const injAfter = injectionDef.text()
+  assert.ok(injAfter.includes('改过的一条：先跑验收再交付'), '下一回合真正贴进去的那段也得是新文本（不是缓存里的旧的）')
+  assert.equal(injAfter.includes(oldText), false, '旧的文本要从真实注入里消失')
+
+  // 内容不许空
+  r = await call('POST', '/api/selfnote/note/update', { index: at, text: '   ' })
+  assert.equal(r.status, 400)
+  r = await call('POST', '/api/selfnote/note/update', { index: 999, text: '没有这一条' })
+  assert.equal(r.status, 400)
+  assert.match(r.payload.error, /刷新/, '下标过期时说人话，别只说非法参数')
+
+  // 删一条：进归档，不是凭空消失
+  r = await call('GET', '/api/selfnote/state')
+  const victim = r.payload.notes[0]
+  r = await call('POST', '/api/selfnote/note/delete', { index: 0 })
+  assert.equal(r.status, 200, JSON.stringify(r.payload))
+  assert.equal(r.payload.notes.some((item) => item.text === victim.text), false, '删掉的不该还在')
+  assert.equal(r.payload.noteDelete.kept, before35.length - 1)
+  assert.ok(existsSync(r.payload.noteDelete.archivedFile), '删掉的条目必须留在归档文件里')
+  assert.match(readFileSync(r.payload.noteDelete.archivedFile, 'utf8'), new RegExp(victim.text.slice(0, 8)), '归档里要能搜到那句原文')
+  console.log('35. 改一条 / 删一条：注入段立刻变、日期不改、下标过期说人话、删掉的进归档')
+}
+
+/* 36. 记忆正文也能改（注入里的「关于他」就是这些句子） */
+{
+  r = await call('GET', '/api/selfnote/state')
+  const fact = r.payload.facts.approved[0]
+  assert.ok(fact, '前面该已经采纳过一条')
+  const original = fact.text
+  r = await call('POST', '/api/selfnote/fact', { id: fact.id, text: '改过的结论：先跑测试再宣布完成' })
+  assert.equal(r.status, 200, JSON.stringify(r.payload))
+  const after = r.payload.facts.approved.find((item) => item.id === fact.id)
+  assert.equal(after.text, '改过的结论：先跑测试再宣布完成')
+  assert.equal(after.status, 'approved', '改正文不该改状态')
+  assert.equal(after.text === original, false)
+  const hist = after.history[after.history.length - 1]
+  assert.equal(hist.from, 'text', '留痕要能看出这是改正文，不是改状态')
+  assert.equal(hist.via, 'settings')
+
+  r = await call('POST', '/api/selfnote/fact', { id: fact.id, text: '' })
+  assert.equal(r.status, 400)
+  r = await call('POST', '/api/selfnote/fact', { id: fact.id, text: 'x'.repeat(241) })
+  assert.equal(r.status, 400)
+  r = await call('POST', '/api/selfnote/fact', { id: 'nope', text: '不存在的 id' })
+  assert.equal(r.status, 400)
+  console.log('36. 记忆正文可改：状态与出处不动、留痕标 text、空/超长/未知 id 都 400')
+}
+
+/* 37. 注入抬头可改：它就是每回合那段的第一行 */
+{
+  r = await call('POST', '/api/selfnote/config', { heading: '人格（agent 写的）' })
+  assert.equal(r.status, 200, JSON.stringify(r.payload))
+  assert.equal(r.payload.heading, '人格（agent 写的）')
+  assert.ok(r.payload.injection.text.startsWith('人格（agent 写的）'), '抬头必须真的成了第一行')
+
+  r = await call('POST', '/api/selfnote/config', { heading: 'x'.repeat(25) })
+  assert.equal(r.status, 400, '抬头不设上限等于让人用一句话吃掉预算')
+  assert.match(r.payload.error, /24/)
+
+  // 清空抬头 = 不要这一行，注入从内容直接开始
+  r = await call('POST', '/api/selfnote/config', { heading: '' })
+  assert.equal(r.status, 200)
+  assert.equal(r.payload.heading, '')
+  assert.equal(r.payload.injection.text.startsWith('人格'), false)
+  console.log('37. 注入抬头可改：真的成了第一行、超长被拒、清空后从内容开始')
+}
+
+console.log('\n40 项全部通过（data dir: ' + dir + '）')
 process.exit(0)
