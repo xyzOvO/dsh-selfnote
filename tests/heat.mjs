@@ -75,7 +75,7 @@ console.log('6. 低热度不会被自动退役')
 /* 7. 注入按热度挑：预算只够一条时给最热的那条 */
 const { apply } = await import('../lib/index.js')
 const facts = [
-  { id: 'cold1', text: '这是很久以前的一句很长的话，占地方，后面还跟着一长串早就没人提的细节和补充说明，足够把八十字的预算撑满，再补一点让它更稳，继续补到肯定超过预算为止，多写几句也无所谓', tags: ['旧'], status: 'approved', created: '2026-02-01', updated: '2026-02-01', lastHit: '2026-02-01' },
+  { id: 'cold1', text: '这是很久以前的一句很长的话，占地方，后面还跟着一长串早就没人提的细节和补充说明，足够把八十字的预算撑满，再补一点让它更稳，继续补到肯定超过预算为止，多写几句也无所谓，再补一段让它彻底超出现在一百一十的结论段预算', tags: ['旧'], status: 'approved', created: '2026-02-01', updated: '2026-02-01', lastHit: '2026-02-01' },
   { id: 'hot1', text: '昨天确认的约束', tags: ['新'], status: 'approved', created: '2026-11-02', updated: '2026-11-02', lastHit: '2026-11-02', hitCount: 5 },
 ]
 writeFileSync(memory.factsPath(), facts.map((fact) => JSON.stringify(fact)).join('\n') + '\n')

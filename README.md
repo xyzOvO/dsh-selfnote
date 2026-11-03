@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.9.6-4f46e5" alt="version">
+  <img src="https://img.shields.io/badge/version-0.10.0-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
   <img src="https://img.shields.io/badge/tests-146%20passed-0ea5e9" alt="tests">
@@ -62,7 +62,7 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 
 1. 模型多了上面三个工具；
 2. 设置页多一节「自我叙述」（在「知识库」下面）；
-3. 每回合的系统提示里，多一段最多 300 字的记忆。
+3. 每回合的系统提示里，多一段最多 460 字的记忆。
 
 也可以直接对 agent 说：「帮我装一个 DSH 插件，目录是 `<绝对路径>`」。
 
@@ -159,7 +159,7 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
   │                             └─ 冲突？两条并排，各自留原文        ┌────┴────┐
   │                                                                  │         │
   └─> 会话原文（DSH 自己写）──> memory_recall 检索             注入预算  画像聚合
-                                        │                       （300 字）  （60 字）
+                                        │                       （460 字）  （110 字）
                                         └─> memory_stage 提交候选
 ```
 
@@ -201,16 +201,36 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 
 ## 注入预算
 
-每回合四段，合计 300 字：
+每回合五段，合计 460 字（自述占最大一份）：
 
 | 段 | 上限 | 来源 |
 |---|---|---|
-| 自述 | 120 字 | `notes.md` |
-| 画像 | 60 字 | 已采纳 facts 按标签聚合（可手改，最多 120） |
-| 常驻结论 | 80 字 | 已采纳的 facts |
-| 习惯 | 40 字 | 升成习惯的条目 |
+| 自述 | 160 字 | `notes.md` |
+| 画像 | 110 字 | 已采纳 facts 按标签聚合（可手改，最多 120）；单句超过 60 字的（操作性决定）不进画像，留在结论段 |
+| 环境 | 80 字 | `channel: env` 的已采纳 facts —— 路径、账号、踩过的坑，和「这个人是谁」分开 |
+| 常驻结论 | 90 字 | 已采纳的 facts（`channel: rel`） |
+| 习惯 | 20 字 | 升成习惯的条目 |
 
-超了按新近度截断；设置页显示本回合实际注入多少、各段占多少。注入文本按「三份文件的 mtime + 配置」缓存，没变就不重算 —— 省算力，也让系统提示词前缀稳定、吃得到缓存。
+放不下就跳过那一条、继续试后面的（不截半句）；环境条目放不下时只留一句门牌「另有 N 条环境备忘（memory_recall 查）」，让模型知道「你有这些记忆」，而不是假装没有。
+
+设置页显示本回合实际注入多少、各段占多少。注入文本按「三份文件的 mtime + 配置」缓存，没变就不重算 —— 省算力，也让系统提示词前缀稳定、吃得到缓存。
+
+### 环境备忘：和「这个人是谁」分开
+
+同一张 facts 表，用 `channel` 分两路：
+
+- `channel: rel`（默认）：关于你的偏好、约定、决定 —— 进画像和结论段。
+- `channel: env`：本机环境事实（node 装在哪、代理怎么走、哪条坑踩过）—— 单独进「环境备忘」段，**不参与画像**。环境事实不是性格，混进画像会把「你」写成一堆路径。
+
+每条环境事实有两份文本：`text` 是短的（进注入），`detail` 是原文段落（检索命中时给全）。环境条目通常比 80 字预算长，所以放不下时只留一句门牌：
+
+```
+环境备忘（本机事实，不是偏好）：改了插件的 lib/*.js 必须重启 DSH 才生效……；另有 11 条环境备忘（memory_recall 查）
+```
+
+模型看到的是「你有这些记忆 + 怎么取」，不是「这些记忆的全部内容」。真要用哪条，让 `memory_recall` 带出来。
+
+**从 mnemon 迁过来的**：`USER.md` 的约定 → `channel: rel`；`MEMORY.md` 的 12 段环境事实 → `channel: env`（原文留在 `detail`，检索照得到）。迁入的条目 `captureSource: imported-mnemon`、`history.via: import`，设置页能逐条退役。
 
 ## 磁盘上有什么（都能直接看、能 grep、能备份）
 
