@@ -342,8 +342,8 @@ r = await call('GET', '/api/selfnote/state')
 const inj = r.payload.injection
 assert.ok(inj && typeof inj === 'object', 'state 里要有 injection')
 assert.equal(inj.limit, 460)
-assert.deepEqual(inj.segments.map((seg) => seg.key), ['notes', 'profile', 'env', 'facts', 'habits'])
-assert.deepEqual(inj.segments.map((seg) => seg.label), ['自述', '画像', '环境', '结论', '习惯'])
+assert.deepEqual(inj.segments.map((seg) => seg.key), ['notes', 'guide', 'profile', 'env', 'facts', 'habits'])
+assert.deepEqual(inj.segments.map((seg) => seg.label), ['自述', '写自述的时机', '画像', '环境', '结论', '习惯'])
 assert.equal(inj.chars, inj.text.length, '字数要等于原文长度，别各算各的')
 const segSum = inj.segments.reduce((n, seg) => n + seg.chars, 0)
 assert.equal(segSum + inj.overhead, inj.chars, '四段字数 + 框架文字（标题/边界句/画像抬头）= 总字数')
@@ -429,5 +429,36 @@ console.log('27. 心跳：注入一次就落一次盘')
   console.log('29. 环境门牌：另有 N 条里的 N 是真数')
 }
 
-console.log('\n32 项全部通过（data dir: ' + dir + '）')
+/* 30. 自定义「写自述的时机」：进注入、能改回空、超长拒绝；上次写入时间要能读 */
+{
+  r = await call('POST', '/api/selfnote/config', { noteGuide: '每次验收完写一条' })
+  assert.equal(r.status, 200)
+  assert.equal(r.payload.noteGuide, '每次验收完写一条')
+
+  r = await call('GET', '/api/selfnote/state')
+  const guideSeg = r.payload.injection.segments.find((seg) => seg.key === 'guide')
+  assert.ok(guideSeg, '注入快照里要有这一段')
+  assert.equal(guideSeg.chars, '每次验收完写一条'.length)
+  assert.match(r.payload.injection.text, /写自述的时机：每次验收完写一条/, '自定义引导要真的进注入')
+  assert.equal(r.payload.noteGuide, '每次验收完写一条', 'state 要回显当前引导')
+
+  // 超长直接拒，不能悄悄截断
+  r = await call('POST', '/api/selfnote/config', { noteGuide: '很'.repeat(81) })
+  assert.equal(r.status, 400)
+
+  // 清空 = 回到默认判据：注入里不再有这一行
+  r = await call('POST', '/api/selfnote/config', { noteGuide: '' })
+  assert.equal(r.status, 200)
+  r = await call('GET', '/api/selfnote/state')
+  assert.equal(r.payload.injection.text.indexOf('写自述的时机：'), -1, '清空后不该再出现这一行')
+
+  // 上次写入时间：写一条就从「还没写过」变成具体时刻
+  await call('POST', '/api/selfnote/note', { text: '测试：写一条看时间' })
+  r = await call('GET', '/api/selfnote/state')
+  assert.equal(typeof r.payload.notesLastWrite, 'string', '写过之后要有上次写入时间')
+  assert.ok(Number.isFinite(Date.parse(r.payload.notesLastWrite)), '要是个能解析的时间')
+  console.log('30. 写自述的时机：能改、能清空、超长拒绝；上次写入时间读得到')
+}
+
+console.log('\n33 项全部通过（data dir: ' + dir + '）')
 process.exit(0)
