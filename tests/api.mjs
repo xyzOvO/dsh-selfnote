@@ -369,7 +369,11 @@ for (const key of ['index', 'capture', 'facts', 'notes', 'auth']) {
   assert.ok(check, '缺了 ' + key + ' 这项')
   assert.ok(['ok', 'warn', 'error'].includes(check.level), key + ' 要有分级')
   assert.ok(String(check.detail).length > 0, key + ' 要写清为什么')
+  assert.ok(!String(check.detail).includes('undefined'), key + ' 的结论里不能出现 undefined')
 }
+/* 自述的上限是配置项，不在 stats() 里 —— 直接拿 stats().maxChars 会得到 undefined，
+   界面上就成了「（上限 undefined）」，等于什么都没说 */
+assert.match(doc.checks.find((item) => item.key === 'notes').detail, /上限 \d+/, '自述这项要给出真实上限')
 /* 塞一行坏 JSON，体检必须报出来 —— 这条记忆读不到，而且平时是静默的 */
 writeFileSync(factsFile, readFileSync(factsFile, 'utf8') + '{"id":"broken",\n')
 r = await call('GET', '/api/selfnote/doctor')
