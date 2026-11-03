@@ -357,5 +357,33 @@ assert.ok(r.payload.heartbeat.injections >= 1)
 assert.ok(r.payload.warm && typeof r.payload.warm.total === 'number', 'state 里要有温层统计')
 console.log('27. 心跳：注入一次就落一次盘')
 
-console.log('\n28 项全部通过（data dir: ' + dir + '）')
+/* 28. 注入归属：进过几次、上次什么时候、哪些三十天没碰过 */
+{
+  const stamp = (daysAgo) => new Date(Date.now() - daysAgo * 86400000).toISOString()
+  const attrRows = [
+    { id: 'attr-live', text: '今天还在用的一条', status: 'approved', channel: 'rel', hitCount: 4, lastHit: stamp(1) },
+    { id: 'attr-stale', text: '四十天没进过的一条', status: 'approved', channel: 'rel', hitCount: 9, lastHit: stamp(40) },
+    { id: 'attr-never', text: '采纳了却从没进过的一条', status: 'approved', channel: 'env', hitCount: 0 },
+    { id: 'attr-cand', text: '还是候选', status: 'candidate', hitCount: 0 },
+  ]
+  writeFileSync(factsFile, attrRows.map((row) => JSON.stringify(row)).join('\n') + '\n')
+
+  r = await call('GET', '/api/selfnote/state')
+  assert.equal(r.status, 200)
+  const attr = r.payload.attribution
+  assert.ok(attr, 'state 里要有归属统计')
+  assert.equal(attr.total, 3, '只统计已采纳的，候选不算')
+  const byId = Object.fromEntries(attr.rows.map((row) => [row.id, row]))
+  assert.equal(byId['attr-live'].state, 'live')
+  assert.equal(byId['attr-stale'].state, 'stale', '超过 30 天没进注入就是 stale')
+  assert.equal(byId['attr-never'].state, 'never', '采纳了但 hitCount 是 0，要标出来')
+  assert.equal(byId['attr-never'].lastHit, null)
+  assert.equal(byId['attr-stale'].hits, 9)
+  assert.ok(byId['attr-stale'].days >= 39, '要能算出多少天前')
+  assert.deepEqual([attr.live, attr.stale, attr.never], [1, 1, 1], '三个计数要和行对上')
+  assert.equal(attr.rows[0].state, 'stale', '没在用的排前面，方便清理')
+  console.log('28. 注入归属：在用 / 静默 / 从没进过 三种状态都算对')
+}
+
+console.log('\n29 项全部通过（data dir: ' + dir + '）')
 process.exit(0)

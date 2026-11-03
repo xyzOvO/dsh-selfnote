@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.10.0-4f46e5" alt="version">
+  <img src="https://img.shields.io/badge/version-0.10.1-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
   <img src="https://img.shields.io/badge/tests-146%20passed-0ea5e9" alt="tests">
@@ -103,12 +103,27 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 
 | 段 | 预算 | 页面显示 |
 |---|---|---|
-| 自述 | 120 字 | 进了几条、本段占多少字 |
-| 画像 | 60 字 | 同上 |
-| 结论 | 80 字 | 同上 |
-| 习惯 | 40 字 | 同上 |
+| 自述 | 160 字 | 进了几条、本段占多少字 |
+| 画像 | 110 字 | 同上 |
+| 环境 | 80 字 | 同上 |
+| 结论 | 90 字 | 同上 |
+| 习惯 | 20 字 | 同上 |
 
 被预算挤掉的条目会**列出来**，并标明「整条跳过，不截半句」—— 半句话会被当成结论读。这段文字来自 `assembleInjection()`（纯函数，不写盘、不记热度），所以设置页刷新一百次也不会把热度刷歪。
+
+### 注入归属：这条记忆到底有没有被用上
+
+同一页下面还有一张「注入归属」表，给每条**已采纳**的记忆标三件事：进了哪一段、进过几次、上次什么时候。
+
+| 状态 | 含义 |
+|---|---|
+| 在用 | 最近 30 天内真的被贴进过提示词 |
+| 静默 | 进过，但 30 天没再进过 —— 占着位置没在干活 |
+| 从没进过 | 采纳了，却一次都没轮到它（被别的段挤掉，或被画像吸收） |
+
+数据来自两个早就存在的字段：`hitCount`（**只有真的进了这句话才 +1**，被检索到不算）和 `lastHit`。所以它衡量的是「占了多少位置」，不是「有多重要」—— 重要性靠人判断，插件不替你做。
+
+它能回答一个具体问题：**多加的 100 字，到底该给谁。** 静默条目就是候选答案。
 
 ### 索引：过期了就说过期
 
@@ -127,6 +142,24 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 「重建索引」跑完之后**不会直接报成功**：它会再跑一次 `freshness()` 对一遍磁盘，只有覆盖齐了才报成功；有会话解不开就明说「N 个会话解不开、内容没进索引」，不把「跑完了」说成「修好了」。
 
 解不开的会话也不会被当成空会话：`parseSession` 会如实标记失败，这类会话不进磁盘缓存 —— 否则缓存一写，下次就照着「空会话」返回，问题永久藏起来。
+
+### 增量解析：只解新加的那一句
+
+DSH 的会话文件是**逐条追写**的 zstd 序列（一次写入 = 一个 frame）。老做法是每次查记忆都把整份 14 MB 的文件重新解一遍 —— 长会话越聊越慢。
+
+现在缓存里记三样东西：**前缀指纹**（开头 64 字节的 hash）、**停在哪一帧结束**（字节偏移）、**累计行号**。下次文件变长时：
+
+1. 前缀指纹没变 → 说明是追写，不是重写
+2. 从上次的帧边界往后**只读新增的字节**，只解这几帧
+3. 新记录的 `index` 从上次的累计行号接着数，出处（`会话#行号`）不会指错
+
+实测（14.4 MB、436 条记录的真实会话）：全量解析 536 ms，增量 17 ms，**省 97%**。
+
+三条退路保证它「慢一点，但不会读错」：
+
+- 指纹对不上（文件被重写、换了一份）→ 全量重解
+- 停的位置不是帧边界 → 全量重解
+- 尾巴那帧还没写完 → 就地停下，已解出来的照常返回，等它写完再接着解（以前这种情况会让整个会话变成「解不开」）
 
 ### 文件区：看得见、点得开
 
@@ -311,14 +344,14 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 ## 开发
 
 ```bash
-node --run test              # 149 项，13 个文件，无外部依赖
+node --run test              # 162 项，15 个文件，无外部依赖
 node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 ```
 
 | 文件 | 覆盖 |
 |---|---|
 | `tests/smoke.mjs` `tests/api.mjs` `tests/client.mjs` `tests/client-state.mjs` | 注册、写入、容量裁剪、归档、HTTP 路由、设置页渲染 |
-| `tests/memory.mjs` `tests/roles.mjs` `tests/index.mjs` | 检索分层、角色权重、倒排索引与过期判定 |
+| `tests/memory.mjs` `tests/roles.mjs` `tests/index.mjs` `tests/incremental.mjs` | 检索分层、角色权重、倒排索引与过期判定、增量解析（追写 / 重写 / 半帧 / 坏文件） |
 | `tests/heat.mjs` `tests/facts-tx.mjs` `tests/profile.mjs` | 遗忘曲线边界、facts 写事务（并发不覆盖）、画像聚合与冲突计数 |
 | `tests/capture.mjs` `tests/capture-p1b.mjs` | 触发词、去重合并、游标幂等与崩溃恢复 |
 | `tests/crash-write.mjs` | 写入过程中被 SIGKILL：notes.md / config.json 不留半截文件 |
