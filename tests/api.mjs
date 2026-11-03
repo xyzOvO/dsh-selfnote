@@ -522,5 +522,45 @@ console.log('27. 心跳：注入一次就落一次盘')
   console.log('32. 委派会话不注入：子代理跳过并计数，主线与分叉照常')
 }
 
-console.log('\n35 项全部通过（data dir: ' + dir + '）')
+/* 33. 体检别喊狼来了：脚本探测被拒是设计如此，页面被拒才是毛病 */
+{
+  const now = new Date().toISOString()
+  const line = (obj) => JSON.stringify({ at: now, ...obj })
+  writeFileSync(
+    join(dir, 'auth.log'),
+    [
+      // 旧版本留下的空凭据头：现在空头等于没带，直接放行，不该算拒绝
+      line({ reason: 'token-length:0', host: '127.0.0.1:1234', origin: null, ua: 'curl/8.22.0', tokenLen: 0, url: '/api/selfnote/state' }),
+      // 我自己的负向测试：脚本拿错凭据被挡，页面不受影响
+      line({ reason: 'token-length:1', host: '127.0.0.1:1234', origin: null, ua: 'node', tokenLen: 1, url: '/api/selfnote/state' }),
+    ].join('\n') + '\n',
+  )
+
+  r = await call('GET', '/api/selfnote/doctor')
+  let auth = r.payload.checks.find((item) => item.key === 'auth')
+  assert.equal(auth.level, 'ok', '只有脚本探测被拒时不该报警')
+  assert.match(auth.detail, /脚本探测/, '要说清那是脚本，不是设置页')
+  assert.equal(r.payload.next === null || !r.payload.next.key.startsWith('auth'), true, '这种记录也不该进「先做这一件」')
+
+  // 浏览器页面被拒 → 这才该响，而且要说清原因与时间
+  writeFileSync(
+    join(dir, 'auth.log'),
+    line({
+      reason: 'token-mismatch',
+      host: '127.0.0.1:1234',
+      origin: 'http://127.0.0.1:1234',
+      ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0',
+      tokenLen: 32,
+      url: '/api/selfnote/state',
+    }) + '\n',
+  )
+  r = await call('GET', '/api/selfnote/doctor')
+  auth = r.payload.checks.find((item) => item.key === 'auth')
+  assert.equal(auth.level, 'warn', '页面被拒要报 warn')
+  assert.match(auth.detail, /设置页被拒了 1 次/)
+  assert.match(auth.detail, /凭据不匹配/, '要把 reason 翻成人话，别让人猜 token-mismatch')
+  console.log('33. 设置页准入：脚本探测不算报警，页面被拒才响，且说得清原因')
+}
+
+console.log('\n36 项全部通过（data dir: ' + dir + '）')
 process.exit(0)

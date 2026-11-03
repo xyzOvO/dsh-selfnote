@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.10.6-4f46e5" alt="version">
+  <img src="https://img.shields.io/badge/version-0.10.7-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
   <img src="https://img.shields.io/badge/tests-146%20passed-0ea5e9" alt="tests">
@@ -320,10 +320,12 @@ DSH 的会话文件是**逐条追写**的 zstd 序列（一次写入 = 一个 fr
 | 自动采集 | 游标多久没动、覆盖几个会话 | 采集停了（插件没加载） |
 | 记忆文件完整性 | facts.jsonl 每行能否解析 | 有坏行 —— 这条记忆读不到，而且平时是静默的 |
 | 自述 | 条数、字数、是否超上限 | 一条都没有，或超了 |
-| 设置页准入 | 最近 24 小时拒了几次、主因 | 一直在 403，说明配置错了 |
+| 设置页准入 | 浏览器页面有没有被拒（脚本探测被拒不算） | 设置页真的在 403 —— 脚本用 curl / node 拿错凭据不算毛病 |
 | 记忆心跳 | 上次注入是多久前 | 注入停了 |
 
 `GET /api/selfnote/doctor` 返回 `{ok, level, checks, next}`，每项 `{key, label, level, detail, fix}`。
+
+设置页准入这条特别区分了「谁被拒」：浏览器页面被拒才报警，`curl` / `node` 这类脚本拿错凭据被挡属于设计如此（脚本本来就不该拿页面凭据）。旧版本记下的 `token-length:0`（那时候凭据还是必填的）也不再算拒绝 —— 现在带个空的凭据头等于没带，直接放行。
 
 `next` 是「**先做这一件**」：十条检查人只会动第一条，所以服务端按后果排好序 —— 数据完整性（丢了补不回来）> 索引（检索能不能用）> 采集 > 设置页准入 > 自述与心跳。设置页把这条顶在列表上方。
 
