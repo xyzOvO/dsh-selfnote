@@ -306,5 +306,19 @@ assert.ok(r.payload.verified.failed >= 1, '解不开的会话要计入 failed')
 assert.match(String(r.payload.error), /解不开/)
 console.log('24. 有会话解不开时报失败，不伪装成功')
 
-console.log('\n24 项全部通过（data dir: ' + dir + '）')
+/* 25. 注入快照：四段结构、字数与原文对得上（设置页「注入」页照镜子用） */
+r = await call('GET', '/api/selfnote/state')
+const inj = r.payload.injection
+assert.ok(inj && typeof inj === 'object', 'state 里要有 injection')
+assert.equal(inj.limit, 300)
+assert.deepEqual(inj.segments.map((seg) => seg.key), ['notes', 'profile', 'facts', 'habits'])
+assert.deepEqual(inj.segments.map((seg) => seg.label), ['自述', '画像', '结论', '习惯'])
+assert.equal(inj.chars, inj.text.length, '字数要等于原文长度，别各算各的')
+assert.ok(
+  inj.segments.every((seg) => Array.isArray(seg.kept) && Array.isArray(seg.skipped)),
+  '每段都要给出进了什么、挤掉什么',
+)
+console.log('25. 注入快照：四段结构、字数与原文一致')
+
+console.log('\n25 项全部通过（data dir: ' + dir + '）')
 process.exit(0)
