@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.9.0-4f46e5" alt="version">
+  <img src="https://img.shields.io/badge/version-0.9.6-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
   <img src="https://img.shields.io/badge/tests-146%20passed-0ea5e9" alt="tests">
@@ -245,6 +245,12 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 - 清空 = 删 `~/.dsh/selfnote/`，或点设置页的「清空」（内容进 `archive/`）。
 - 采集失败、索引过期、注入异常都不阻断对话 —— 记忆是加分项，不是前置条件。
 
+### 设置页的准入凭证
+
+设置页的每个请求都要带 `x-selfnote: <token>`，并且 `Host` 必须是回环地址。这个 token 在每个插件实例首次启动时随机生成（或由 `DSH_SELFNOTE_TOKEN` 环境变量指定），由宿主注入到本页的 HTML 里；**它不是写在文档里的固定值**，本机其他进程照抄 README 也读不到你的记忆。带自定义头的跨站请求会触发预检，服务端不回 CORS 头，浏览器根本发不出来；此外还校验 `Origin` 与 `Host` 同源，挡住 DNS 重绑定。
+
+想用脚本自测，读 `~/.dsh/selfnote/auth-token`（权限 600），或自己设环境变量后带上它。
+
 ## 和人格插件的区别
 
 `dsh-agent-md` 管的是**设定**：你写给它的人设，它照着演。
@@ -255,7 +261,8 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 ## 开发
 
 ```bash
-node --run test     # 146 项，12 个文件，无外部依赖
+node --run test              # 149 项，13 个文件，无外部依赖
+node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 ```
 
 | 文件 | 覆盖 |
@@ -264,6 +271,8 @@ node --run test     # 146 项，12 个文件，无外部依赖
 | `tests/memory.mjs` `tests/roles.mjs` `tests/index.mjs` | 检索分层、角色权重、倒排索引与过期判定 |
 | `tests/heat.mjs` `tests/facts-tx.mjs` `tests/profile.mjs` | 遗忘曲线边界、facts 写事务（并发不覆盖）、画像聚合与冲突计数 |
 | `tests/capture.mjs` `tests/capture-p1b.mjs` | 触发词、去重合并、游标幂等与崩溃恢复 |
+| `tests/crash-write.mjs` | 写入过程中被 SIGKILL：notes.md / config.json 不留半截文件 |
+| `tests/acceptance-runtime.mjs` | 鉴权（无头 / 跨站 / 固定口令）、并发写不丢、锁放弃、注入预算 |
 
 改 `lib/*.js` 或 `lib/client.js` 之后**必须重启 DSH**，热重载不会重新扫描 client bundle。测试会自动隔离 `DSH_MEMORY_DIR`，不会污染真实记忆。
 

@@ -19,7 +19,7 @@ process.env.DSH_SELFNOTE_DIR = root
 process.env.DSH_MEMORY_DIR = join(root, 'memory')
 process.env.DSH_SESSIONS_DIR = join(root, 'sessions')
 
-const { apply } = await import('../lib/index.js')
+const { apply, currentAuthToken } = await import('../lib/index.js')
 
 let handler = null
 let injectionDef = null
@@ -36,6 +36,8 @@ const ctx = {
   },
 }
 apply(ctx, {})
+const token = currentAuthToken()
+assert.ok(token && token !== '1', '准入 token 必须是随机值，不再是固定口令')
 
 /* ------------------------------- 1. 接口鉴权 ------------------------------- */
 
@@ -69,18 +71,18 @@ assert.equal(r.body.ok, false)
 console.log('1. 不带 x-selfnote 头 → 403')
 
 // 1b. 带上准入头 —— 相当于设置页自己
-r = await hit('/state', { headers: { 'x-selfnote': '1' } })
+r = await hit('/state', { headers: { 'x-selfnote': token } })
 assert.equal(r.status, 200)
 assert.equal(r.body.ok, true)
 console.log('2. 带正确请求头 → 200，正常返回状态')
 
 // 1c. 跨 Origin（带着正确头也不行）
-r = await hit('/state', { headers: { 'x-selfnote': '1', origin: 'http://evil.example' } })
+r = await hit('/state', { headers: { 'x-selfnote': token, origin: 'http://evil.example' } })
 assert.equal(r.status, 403, '跨站 Origin 必须拒绝')
 console.log('3. 跨站 Origin → 403')
 
 // 1d. 同 Origin 放行
-r = await hit('/state', { headers: { 'x-selfnote': '1', origin: `http://${host}`, host } })
+r = await hit('/state', { headers: { 'x-selfnote': token, origin: `http://${host}`, host } })
 assert.equal(r.status, 200, '同源必须放行')
 console.log('4. 同源 Origin → 200')
 
@@ -96,7 +98,7 @@ assert.equal(existsSync(factsPath), false, '被拒的跨站写入不能落盘')
 console.log('5. 跨站 text/plain 表单写入 → 403，且没落盘')
 
 // 1f. 外部 curl 等价物：没有 Origin 但有头 → 放行（脚本/自测要带这个头）
-r = await hit('/state', { headers: { 'x-selfnote': '1', accept: 'application/json' } })
+r = await hit('/state', { headers: { 'x-selfnote': token, accept: 'application/json' } })
 assert.equal(r.status, 200)
 console.log('6. curl 带 x-selfnote 头 → 200（外部脚本的用法）')
 
@@ -128,14 +130,15 @@ writeFileSync(factsPath, seed.map((fact) => JSON.stringify(fact)).join('\n') + '
 
 const worker = join(here, 'worker-facts.mjs')
 
-/** 跑一批子进程，返回失败的那些。 */
-async function runBatch(indexes) {
+/**
+ * 跑一批子进程，返回失败的那些。
+ * touchFacts 是「软写入」（抢不到锁就这回合不记，下回合再试），压力阶段不该要求它落地；
+ * 硬写入 append / approve / capture 则必须一条不丢。
+ */
+async function runBatch(indexes, modes = ['touch', 'append', 'approve', 'capture']) {
   const jobs = []
   for (const index of indexes) {
-    jobs.push(runWorker(worker, root, 'touch', index))
-    jobs.push(runWorker(worker, root, 'append', index))
-    jobs.push(runWorker(worker, root, 'approve', index))
-    jobs.push(runWorker(worker, root, 'capture', index))
+    for (const mode of modes) jobs.push(runWorker(worker, root, mode, index))
   }
   const results = await Promise.all(jobs)
   return results.filter((item) => item.code !== 0)
@@ -164,9 +167,9 @@ for (const index of realistic) {
 }
 console.log('7. 16 个并发进程（新增/热度/审核/采集各 4）：改动一条没丢')
 
-// 阶段 B：压力（48 个进程同时写）—— 要求文件不坏、原有数据不丢，不要求百分比
+// 阶段 B：压力（36 个硬写入进程同时写）—— 要求硬写入一条不丢、文件不坏
 const stress = ['10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21']
-failed = await runBatch(stress)
+failed = await runBatch(stress, ['append', 'approve', 'capture'])
 assert.deepEqual(failed, [], '压力阶段不该有子进程报错：' + JSON.stringify(failed.slice(0, 2)))
 
 after = readFacts()
@@ -180,7 +183,7 @@ for (const index of stress) {
 capturedSources = new Set()
 for (const fact of after) for (const source of fact.evidence ?? []) capturedSources.add(source)
 const captured = stress.filter((index) => capturedSources.has('cap-' + index + '#1')).length
-console.log('8. 压力阶段 48 进程：候选落地 ' + landed + '/12、采集落地 ' + captured + '/12，文件未损坏')
+console.log('8. 压力阶段 36 个硬写入进程：候选落地 ' + landed + '/12、采集落地 ' + captured + '/12，文件未损坏')
 
 // 2c. 原有事实完整保留（字段一个不少，值没被改）
 const kept = byId.get('keep')

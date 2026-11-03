@@ -18,7 +18,12 @@ process.env.DSH_SESSIONS_DIR = join(dir, 'sessions')
 // 测试里不要去弹真实的资源管理器窗口
 process.env.DSH_SELFNOTE_NO_OPEN = '1'
 
-const { apply } = await import('../lib/index.js')
+const { apply, currentAuthToken } = await import('../lib/index.js')
+const HOST = '127.0.0.1:56645'
+/** 准入头要等 apply() 跑完才拿得到真实 token，所以取头是惰性的。extra 后展开，好让用例覆盖它。 */
+function authHeaders(extra) {
+  return { 'x-selfnote': currentAuthToken(), host: HOST, ...extra }
+}
 
 let handler = null
 const toolHold = []
@@ -52,8 +57,8 @@ function call(method, url, body, headers) {
     const req = new EventEmitter()
     req.method = method
     req.url = url
-    // 默认带上准入头，专门测鉴权的用例再自己覆盖
-    req.headers = headers ?? { 'x-selfnote': '1' }
+    // 默认带上准入头（含回环 Host），专门测鉴权的用例再自己覆盖
+    req.headers = headers ?? authHeaders()
     const res = {
       status: 0,
       headers: null,
@@ -175,6 +180,15 @@ const noStage = await stageTool.execute({ text: '没有出处的一条', session
 assert.equal(noStage.ok, false)
 console.log('11. 出处对不上 → 拒绝')
 
+/* 11b. execute 内部抛错时要把错误交回模型，而不是把堆栈甩出去 */
+const throwing = await stageTool.execute({
+  get text() {
+    throw new Error('读取参数时炸了')
+  },
+})
+assert.match(String(throwing?.error ?? ''), /提交失败：读取参数时炸了/)
+console.log('11b. execute 抛错 → 收成 error 字段，不冒泡')
+
 /* 12. 采纳后进注入预算（第 5 步把注入关掉了，先开回来） */
 r = await call('POST', '/api/selfnote/config', { enabled: true })
 assert.equal(r.payload.enabled, true)
@@ -224,20 +238,14 @@ assert.equal(r.status, 403)
 assert.equal(JSON.parse(readFileSync(factsFile, 'utf8').trim()).status, 'approved', '被拒的写请求不该落盘')
 console.log('16. 没有 x-selfnote 头 → 403，且不落盘')
 
-/* 17. 跨站 Origin → 403，同源 → 放行 */
-r = await call('GET', '/api/selfnote/state', undefined, {
-  'x-selfnote': '1',
-  origin: 'http://evil.example',
-  host: '127.0.0.1:56645',
-})
+/* 17. 跨站 Origin → 403，同源 → 放行；固定口令不再有效 */
+r = await call('GET', '/api/selfnote/state', undefined, authHeaders({ origin: 'http://evil.example' }))
 assert.equal(r.status, 403)
-r = await call('GET', '/api/selfnote/state', undefined, {
-  'x-selfnote': '1',
-  origin: 'http://127.0.0.1:56645',
-  host: '127.0.0.1:56645',
-})
+r = await call('GET', '/api/selfnote/state', undefined, authHeaders({ origin: `http://${HOST}` }))
 assert.equal(r.status, 200)
-console.log('17. 跨站 Origin → 403，同源 → 200')
+r = await call('GET', '/api/selfnote/state', undefined, authHeaders({ 'x-selfnote': '1' }))
+assert.equal(r.status, 403, 'README 里那个固定值不该再能进门')
+console.log('17. 跨站 Origin / 固定口令 → 403，真实 token + 同源 → 200')
 
 /* 18. 一条超长条目不该把整段预算挤空 */
 await call('POST', '/api/selfnote/note', { text: '长'.repeat(130) })
@@ -322,5 +330,5 @@ assert.ok(
 )
 console.log('25. 注入快照：四段结构、字数与原文一致')
 
-console.log('\n25 项全部通过（data dir: ' + dir + '）')
+console.log('\n26 项全部通过（data dir: ' + dir + '）')
 process.exit(0)

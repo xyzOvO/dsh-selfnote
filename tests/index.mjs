@@ -75,6 +75,15 @@ assert.equal(result.hits[0].session, 'session-aaa')
 assert.equal(result.complete, true)
 console.log('5. searchByIds 拿到正文并能给出引文（' + result.hits[0].session + ' 第 ' + result.hits[0].index + ' 条）')
 
+/* 5b. 索引路径也要认 since：早于 since 的记录不能借索引漏回来 */
+const futureOnly = memory.searchByIds(keys, '插件安装', { limit: 5, since: '2999-01-01' })
+assert.equal(futureOnly.hits.length, 0, 'since 在未来时索引路径不该返回任何命中')
+const pastOnly = memory.searchByIds(keys, '插件安装', { limit: 5, since: '2000-01-01' })
+assert.ok(pastOnly.hits.length >= 1, 'since 在过去时索引路径照常返回')
+const viaRecall = memory.recall('插件安装', { mode: 'raw', ids: keys, since: '2999-01-01', limit: 5 })
+assert.equal(viaRecall.raw.hits.length, 0, 'recall 走索引分支时 since 也必须生效')
+console.log('5b. 索引路径遵守 since（未来 0 条 / 过去有命中 / recall 同样生效）')
+
 /* 6. 新鲜度：刚建的索引算新鲜 */
 assert.equal(store.isFresh(index), true)
 console.log('6. 刚建的索引是新鲜的')
@@ -141,5 +150,5 @@ assert.equal(multi.records.length, 2, '多 frame 文件应该解出 2 条')
 assert.match(multi.records[1].text, /第二帧/)
 console.log('11. 多 frame zstd 能整块解出来（' + multi.records.length + ' 条）')
 
-console.log('\n11 项全部通过')
+console.log('\n12 项全部通过')
 process.exit(0)
