@@ -277,5 +277,34 @@ assert.equal(r.payload.dryRun, true)
 assert.match(r.payload.opened, /notes\.md$/)
 console.log('21. 打开文件走宿主，测试里不 spawn')
 
-console.log('\n21 项全部通过（data dir: ' + dir + '）')
+/* 22. 索引卡片要用的数字：已索引 / 磁盘 / 待同步 */
+r = await call('GET', '/api/selfnote/state')
+assert.equal(typeof r.payload.index.disk, 'number', '要能算出磁盘上一共几个会话')
+assert.ok(r.payload.index.disk >= 1, '测试里造过会话，磁盘会话数不该是 0')
+assert.equal(typeof r.payload.index.missing, 'number', '要给出待同步会话数')
+assert.equal(typeof r.payload.index.sessions, 'number')
+console.log('22. 索引状态带磁盘会话与待同步数')
+
+/* 23. 重建：跑完要用 freshness() 再验收一次，成功才报成功 */
+r = await call('POST', '/api/selfnote/index', { action: 'build' })
+assert.equal(r.status, 200)
+assert.equal(r.payload.ok, true, String(r.payload.error ?? ''))
+assert.equal(r.payload.verified.fresh, true, '重建完必须是 fresh，否则就等于没修好')
+assert.ok(r.payload.verified.records >= 1, '造过会话，索引里至少要有记录')
+assert.equal(r.payload.index.fresh, true)
+console.log('23. 重建索引 → 用 freshness 验收通过')
+
+/* 24. 有会话解不开时，重建不许把「跑完了」说成「修好了」 */
+const badDir = join(process.env.DSH_SESSIONS_DIR, 'proj', 'session-bad')
+mkdirSync(badDir, { recursive: true })
+writeFileSync(join(badDir, 'session.v4.jsonl.zstd'), Buffer.from('not a zstd frame at all', 'utf8'))
+r = await call('POST', '/api/selfnote/index', { action: 'build' })
+assert.equal(r.status, 200)
+assert.equal(r.payload.ok, false, '解不开的会话没进索引，不能报成功')
+assert.equal(r.payload.verified.fresh, true, '文件在、只是解不开：覆盖是齐的，但内容没进去')
+assert.ok(r.payload.verified.failed >= 1, '解不开的会话要计入 failed')
+assert.match(String(r.payload.error), /解不开/)
+console.log('24. 有会话解不开时报失败，不伪装成功')
+
+console.log('\n24 项全部通过（data dir: ' + dir + '）')
 process.exit(0)

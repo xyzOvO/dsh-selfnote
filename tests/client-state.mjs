@@ -32,7 +32,7 @@ const base = {
   maxEntryChars: 600,
   memory: { facts: 2, approved: 1, candidates: 1, retired: 0, habits: 0, sessions: 10, cache: 0, root: 'C:/x/memory' },
   runtime: { node: '24.21.0', electron: '44.7.0', platform: 'win32', sqlite: true },
-  index: { present: false, fresh: false },
+  index: { present: true, fresh: false, sessions: 270, disk: 301, missing: 31, records: 1609, terms: 87362, bytes: 8760728, builtAt: '2026-11-02T19:50:42.946Z', failed: 0 },
   budget: { notes: 20, profile: 0, facts: 12, habits: 0, total: 32, limit: 300 },
   profile: { enabled: true, override: '', maxChars: 60, manual: false, text: '', chars: 0, parts: [], sources: [], conflicts: [] },
   habits: [],
@@ -200,6 +200,28 @@ assert.ok(json.includes('候选 1 · 采纳 1 · 退役 0'), '事实库要显示
 assert.ok(json.includes('还没生成'), '缺文件的条目要说明还没生成')
 assert.ok(!json.includes('undefined'), '文件卡不该出现 undefined')
 console.log('6. 文件卡显示路径/大小/条数，缺失的降级')
-console.log('\n6 项全部通过')
+
+/* 7. 索引卡：七项指标 + 过期标记 + 重建按钮 */
+tree = render(base)
+json = JSON.stringify(tree)
+assert.match(json, /历史对话索引/)
+assert.ok(json.includes('已过期'), 'fresh=false 时要标已过期')
+assert.ok(json.includes('待同步会话'), '过期时用「待同步」这个词，不是「新增」')
+assert.ok(json.includes('270'), '已索引会话数')
+assert.ok(json.includes('301'), '磁盘会话数')
+assert.ok(json.includes('1609'), '消息记录数')
+assert.ok(json.includes('8.4 MB'), '索引大小要换算成人能读的单位')
+// 构建时间按本地时区显示，期望值现算，别写死（时区不同就假失败）
+const builtLocal = (() => {
+  const d = new Date('2026-11-02T19:50:42.946Z')
+  const pad = (n) => (n < 10 ? '0' + n : String(n))
+  return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes())
+})()
+assert.ok(json.includes(builtLocal), '最近构建时间按本地时区显示：' + builtLocal)
+assert.ok(json.includes('重建索引'), '要有重建按钮')
+assert.ok(!json.includes('undefined'), '索引卡不该出现 undefined')
+console.log('7. 索引卡：状态/覆盖/记录/大小/构建时间 + 重建按钮')
+
+console.log('\n7 项全部通过')
 
 process.exit(0)
