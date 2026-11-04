@@ -1,6 +1,6 @@
 {
   "name": "dsh-selfnote",
-  "version": "0.13.2",
+  "version": "0.13.3",
   "type": "module",
   "description": "Self-narrative memory for DeepSeek Harness: the model writes notes to itself, which persist across sessions and are injected back. | 人格库：模型写给自己看的话，跨会话保留并每回合注入。",
   "keywords": [
@@ -27,7 +27,7 @@
     "assets"
   ],
   "scripts": {
-    "test": "node tests/smoke.mjs && node tests/memory.mjs && node tests/roles.mjs && node tests/heat.mjs && node tests/fair.mjs && node tests/capture-debug.mjs && node tests/facts-tx.mjs && node tests/crash-write.mjs && node tests/capture.mjs && node tests/capture-p1b.mjs && node tests/index.mjs && node tests/incremental.mjs && node tests/profile.mjs && node tests/warm.mjs && node tests/transfer.mjs && node tests/api.mjs && node tests/client-state.mjs && node tests/client.mjs",
+    "test": "node tests/smoke.mjs && node tests/memory.mjs && node tests/roles.mjs && node tests/heat.mjs && node tests/fair.mjs && node tests/capture-debug.mjs && node tests/facts-tx.mjs && node tests/crash-write.mjs && node tests/capture.mjs && node tests/capture-p1b.mjs && node tests/index.mjs && node tests/incremental.mjs && node tests/profile.mjs && node tests/warm.mjs && node tests/transfer.mjs && node tests/api.mjs && node tests/notes-tier.mjs && node tests/client-state.mjs && node tests/client.mjs",
     "test:accept": "node tests/acceptance-runtime.mjs"
   },
   "engines": {

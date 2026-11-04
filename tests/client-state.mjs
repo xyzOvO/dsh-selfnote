@@ -309,12 +309,28 @@ assert.ok(
 )
 const rowActions = nodes.filter((node) => node.props && /sn-row-actions/.test(node.props.className || ''))
 assert.equal(rowActions.length, 2, '两条自述各有一组行内操作')
-const actionLabels = rowActions.map((node) => node.children.map((kid) => (kid && kid.children ? kid.children[0] : '')).join('/'))
-assert.deepEqual(actionLabels, ['改/删', '改/删'], '每行都该有「改」和「删」两个按钮')
-const actionButtons = rowActions.flatMap((node) => node.children)
+const actionLabels = rowActions.map((node) =>
+  node.children
+    .map((kid) => {
+      if (!kid) return ''
+      if (kid.type === 'select') return '类型'
+      return kid.children ? String(kid.children[0]) : ''
+    })
+    .join('/'),
+)
+assert.deepEqual(actionLabels, ['类型/☆/改/删', '类型/☆/改/删'], '每行：类型 + ☆ + 改 + 删')
+const rowKids = rowActions.flatMap((node) => node.children)
+const actionButtons = rowKids.filter((node) => node.type === 'button')
+assert.equal(actionButtons.length, 6, '每行三个按钮：pin / 改 / 删')
 assert.ok(
   actionButtons.every((node) => node.type === 'button' && typeof node.props.onClick === 'function'),
   '行内操作要是真按钮，并且真的挂了点击处理'
+)
+const tierSelects = rowKids.filter((node) => node.type === 'select')
+assert.equal(tierSelects.length, 2, '每行一个类型下拉')
+assert.ok(
+  tierSelects.every((node) => typeof node.props.onChange === 'function'),
+  '类型下拉要真的能改'
 )
 assert.ok(json.includes('改完/删完下一回合生效'), '要说明改完什么时候生效')
 assert.ok(!json.includes('undefined'), '自述页不该出现 undefined')
