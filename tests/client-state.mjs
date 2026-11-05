@@ -414,9 +414,11 @@ assert.ok(json.includes('回答先给结论，再给细节。'), 'L1 正文要�
 assert.ok(json.includes('外套是深蓝色'), 'L2 正文要显示出来（它不进注入，但人得能改）')
 const pL0 = Array.from(base.persona.l0).length
 const pL1 = Array.from(base.persona.l1).length
-assert.ok(json.includes('L0 ' + pL0 + ' + L1 ' + pL1 + ' = ' + (pL0 + pL1) + ' / 320 字（余 ' + (320 - pL0 - pL1) + '）'), '要说清 320 的账怎么算的')
+const pGap = pL0 > 0 && pL1 > 0 ? 1 : 0
+assert.ok(json.includes('L0 ' + pL0 + ' + L1 ' + pL1 + (pGap ? ' + 换行 1' : '') + ' = ' + (pL0 + pL1 + pGap) + ' / 320 字（余 ' + (320 - pL0 - pL1 - pGap) + '）'), '要说清 320 的账怎么算的（含 L0/L1 之间那个换行）')
 assert.ok(json.includes(pL0 + ' / 80 字'), 'L0 要有自己的上限提示')
-assert.ok(json.includes((320 - pL0) + ' 字'), 'L1 的可用额度是 320 减掉 L0')
+const pL1Max = Math.max(0, 320 - Math.min(pL0, 80) - (pL0 > 0 ? 1 : 0))
+assert.ok(json.includes(pL1Max + ' 字'), 'L1 的可用额度是 320 减掉 L0 和那一个换行')
 assert.ok(json.includes('保存人格'), '要有整份保存按钮')
 assert.ok(json.includes('从 AGENT.md 导入'), '要有导入入口（迁移用，导入≠采纳）')
 assert.ok(json.includes('我说过先举例再给结论'), '纠偏证据的原话要给出来')

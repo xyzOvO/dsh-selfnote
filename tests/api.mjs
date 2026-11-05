@@ -906,6 +906,20 @@ console.log('52. state 带人格与纠偏，体检八项')
   console.log('54. 开机补完半截事务：重启即幂等重放，日志清掉，人格文件不动')
 }
 
-console.log('\n54 项全部通过（data dir: ' + dir + '）')
+/* 55. 只给一段不会清空别的；三段都不给直接拒绝 */
+rp = await call('POST', '/api/selfnote/persona', { l0: '我是大肥鱼。', l1: '先举例再给结论。', l2: '外套深蓝。' })
+assert.equal(rp.status, 200)
+rp = await call('POST', '/api/selfnote/persona', { l1: '只改第二段。' })
+assert.equal(rp.status, 200)
+let partial = readPersona()
+assert.equal(partial.l0, '我是大肥鱼。', '没给的段要沿用盘上现值')
+assert.equal(partial.l2, '外套深蓝。')
+assert.equal(partial.l1, '只改第二段。')
+rp = await call('POST', '/api/selfnote/persona', {})
+assert.equal(rp.status, 400, '空对象不能把整份人格抹掉')
+assert.equal(readPersona().l1, '只改第二段。')
+console.log('55. 部分字段保存不清空其它段，空对象被拒')
+
+console.log('\n55 项全部通过（data dir: ' + dir + '）')
 
 process.exit(0)

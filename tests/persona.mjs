@@ -49,7 +49,7 @@ console.log('1-4 + countChars 通过')
 
 // ---- 容量校验、读取与原子保存 ----
 const { validatePersona, savePersonaFile, readPersona, personaPath, PersonaValidationError, costOfLines } = await import('../lib/persona.js')
-const { personaSegment } = await import('../lib/index.js')
+const { personaSegment, PERSONA_POINTER } = await import('../lib/index.js')
 
 savePersonaFile({ l0: '甲'.repeat(72), l1: '乙'.repeat(202), l2: '' })
 const before = readFileSync(personaPath(), 'utf8')
@@ -232,6 +232,7 @@ assert.notEqual((await stateOfNow()).injection.key, keyBefore)
 assert.equal(TOTAL_BUDGET, 1000)
 
 console.log('18-20 人格进注入通过')
+// （22、23 追加在文件末尾，编号延续 21 之后）
 
 // 21. 字符口径统一：段落字数按码点算，加起来加固定开销必须正好等于总数
 savePersonaFile({ l0: '我是大肥鱼🐟。', l1: '- 先给结论。', l2: '' })
@@ -247,5 +248,27 @@ savePersonaFile({ l0: '我是大肥鱼🐟。', l1: '- 先给结论。', l2: '' 
   console.log('21. 字符口径统一：按码点算，各段 + 固定开销 = 总数')
 }
 
+// 22. 只写了 L2：注入里仍要有指路句（否则「有设定」这件事模型永远不知道）
+writeFileSync(personaPath(), '## L2\n\n深色长发，爱吃米饭。\n')
+{
+  const inj = (await stateOfNow()).injection
+  const seg = inj.segments.find((item) => item.key === 'persona')
+  assert.equal(seg.pointer, PERSONA_POINTER, '只有 L2 也要给指路句')
+  assert.ok(inj.text.includes('action:"persona"'), "指路句要进注入正文")
+  assert.equal(seg.chars, 0, '指路句不计入人格段字数')
+  console.log('22. 只有 L2 时注入里也有指路句')
+}
+
+// 23. l1Limit 就是「真正还能填多少」：320 里要扣掉 L0 与 L1 之间那个换行
+savePersonaFile({ l0: '甲'.repeat(54), l1: '', l2: '' })
+{
+  const info = (await stateOfNow()).persona
+  assert.equal(info.l1Limit, 265, '320 - 54 - 1 个换行')
+  savePersonaFile({ l0: '甲'.repeat(54), l1: '乙'.repeat(info.l1Limit), l2: '' })
+  const after = (await stateOfNow()).persona
+  assert.equal(after.l1Chars, info.l1Limit, '按 l1Limit 填满必须真的存得进去')
+  console.log('23. l1Limit 按「扣掉换行」算，填满也存得进去')
+}
+
 rmSync(dir, { recursive: true, force: true })
-console.log('\n21 项全部通过')
+console.log('\n23 项全部通过')
