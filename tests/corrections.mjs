@@ -174,5 +174,109 @@ assert.equal(tooLong.code, 'l0-too-long', '校验码要透出来，别糊成一�
 assert.equal(persona.readPersona().l0, beforePersona.l0)
 console.log('57. 超长：拒绝并说清是哪一段')
 
-console.log('\n12 项全部通过')
+/* ---------------- 58–66. 采集：信号、去重、上限、游标、水位、清理 ---------------- */
+
+store.writeEvents([])
+
+// 58. 强弱信号与三种误命中
+assert.equal(store.extractSignals({ text: '你又错了，这不对', isReply: true }).length, 1, '强信号要落')
+assert.equal(store.extractSignals({ text: '这次不是技术问题', isReply: false }).length, 0, '没有「你」也没有指上一版的弱信号不落')
+assert.equal(store.extractSignals({ text: '不要太长', isReply: true }).length, 0, '「不要太长」是程度不是纠偏')
+assert.equal(store.extractSignals({ text: '我又想到一个新方案', isReply: true }).length, 0, '「我又想到」不是纠错')
+assert.equal(store.extractSignals({ text: '我说过先举例再给结论', isReply: false }).length, 1, '强信号不需要 isReply')
+assert.ok(store.extractSignals({ text: '我说过 A。我说过 B。你又错 C。', isReply: true }).length <= 2, '单条消息最多 2 条证据')
+const weakHit = store.extractSignals({ text: '你把结论改成表格了', isReply: false })
+assert.equal(weakHit.length, 1, '弱信号带「你」就该落')
+assert.equal(weakHit[0].strength, 'weak')
+console.log('58. 强弱信号：该落的落，三种误命中不落')
+
+// 59. 同一消息重复扫描去重；不同消息里同一句话必须保留
+const dupId = store.eventId('s1', 1, '我说过先举例再给结论')
+store.appendEvents([{ id: dupId, session: 's1', idx: 1, quote: '我说过先举例再给结论', at: '2026-11-05T10:00:00.000Z' }])
+store.appendEvents([{ id: dupId, session: 's1', idx: 1, quote: '我说过先举例再给结论', at: '2026-11-05T10:00:00.000Z' }])
+assert.equal(store.listCorrections({}).total, 1, '同一条消息重扫不能变两条')
+store.appendEvents([{ id: store.eventId('s1', 9, '我说过先举例再给结论'), session: 's1', idx: 9, quote: '我说过先举例再给结论', at: '2026-11-06T10:00:00.000Z' }])
+assert.equal(store.listCorrections({}).total, 2, '两天说了两遍是两次纠正，不许合并')
+console.log('59. 事件级去重：同消息合并，不同消息保留')
+
+// 60. 分页：每页 30、翻页途中插入新记录不漂、末页 nextCursor 为 null
+store.writeEvents([])
+for (let i = 0; i < 40; i += 1) {
+  store.appendEvents([{ id: `x-${i}`, session: 's', idx: i, quote: 'q', at: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString() }])
+}
+const page1 = store.listCorrections({ limit: 30 })
+assert.equal(page1.items.length, 30)
+const seen = new Set(page1.items.map((item) => item.id))
+store.appendEvents([{ id: 'late', session: 's9', idx: 0, quote: '别再用表格', at: '2026-11-07T00:00:00.000Z' }])
+const page2 = store.listCorrections({ cursor: page1.nextCursor, limit: 30 })
+assert.equal(page2.items.filter((item) => seen.has(item.id)).length, 0, '第二页不许重复第一页')
+assert.equal(store.listCorrections({ cursor: page2.nextCursor, limit: 500 }).nextCursor, null, '末页 nextCursor 必须是 null')
+console.log('60. 分页：稳定游标，翻页不重不漏')
+
+// 61. 200 条上限：丢最旧（按 at），不是丢最新
+for (let i = 0; i < 200; i += 1) {
+  store.appendEvents([{ id: `pad-${i}`, session: 's', idx: i, quote: 'q', at: new Date(Date.UTC(2026, 1, 1, 0, i)).toISOString() }])
+}
+assert.equal(store.listCorrections({}).total, 200)
+assert.equal(store.listCorrections({ limit: 500 }).items.some((item) => item.id === 'x-0'), false, '最旧的先丢')
+assert.equal(store.listCorrections({ limit: 500 }).items.some((item) => item.id === 'pad-199'), true, '最新的要留着')
+console.log('61. 200 条上限：丢最旧，最新的一定在')
+
+// 62. 清理按 usedAt 算，不按 at：29 天前发生、今天才消费的不能被删
+store.writeEvents([]) // 先清干净：上一段铺的 200 条是二月的，早该过期，会把计数搅浑
+const oldAt = new Date(Date.now() - 29 * 86400000).toISOString()
+store.appendEvents([{ id: 'old-event', session: 's', idx: 0, quote: 'q', at: oldAt }])
+store.markUsed(['old-event'], 'tx-x')
+assert.equal(store.sweep().removed, 0, '刚消费的不该被清掉')
+assert.ok(store.findById('old-event'), '29 天前的证据还在')
+const ancient = new Date(Date.now() - 91 * 86400000).toISOString()
+store.appendEvents([{ id: 'ancient', session: 's', idx: 1, quote: 'q', at: ancient }])
+assert.equal(store.sweep().removed, 1, '未处理超过 90 天该清')
+assert.equal(store.findById('ancient'), undefined)
+console.log('62. 清理：已处理按 usedAt 30 天，未处理按 at 90 天')
+
+// 63. 水位：没有水位就不回填历史
+assert.equal(store.shouldScan({ at: '2026-01-01T00:00:00.000Z', session: 's', idx: 1 }, null), false, '第一次启用不许回填')
+store.writeWatermark({ enabledAt: '2026-11-05T00:00:00.000Z', lastScannedAt: '2026-11-05T12:00:00.000Z', lastSession: 's1', lastIdx: 3 })
+assert.equal(store.shouldScan({ at: '2026-11-05T13:00:00.000Z', session: 's9', idx: 0 }, store.readWatermark()), true)
+assert.equal(store.shouldScan({ at: '2026-11-05T11:00:00.000Z', session: 's9', idx: 0 }, store.readWatermark()), false, '水位之前的不重扫')
+console.log('63. 水位：不回填，只扫新消息')
+
+// 64. 引号 / 换行 / 制表符：一条一行，回读一模一样
+store.appendEvents([{ id: 'q1', session: 's', idx: 0, quote: '他说"别这样"\n第二行\t制表', at: '2026-11-05T14:00:00.000Z' }])
+assert.equal(store.findById('q1').quote, '他说"别这样"\n第二行\t制表')
+console.log('64. 证据原文：引号换行制表符原样往返')
+
+// 65. 从一段真实对话里扫：靠前的旧消息不落，正常纠偏落
+const conv = [
+  { at: '2026-11-05T08:00:00.000Z', session: 's2', idx: 1, text: '我说过先举例再给结论', isReply: false },
+  { at: '2026-11-05T13:00:00.000Z', session: 's2', idx: 2, text: '你又错了，这次不是技术问题', isReply: true },
+  { at: '2026-11-05T13:05:00.000Z', session: 's2', idx: 3, text: '今天天气不错', isReply: false },
+]
+const collected = conv.flatMap((msg) =>
+  store.shouldScan(msg, store.readWatermark())
+    ? store.extractSignals(msg).map((hit) => ({ id: store.eventId(msg.session, msg.idx, hit.quote), session: msg.session, idx: msg.idx, quote: hit.quote, at: msg.at }))
+    : [],
+)
+assert.equal(collected.length, 1, '水位前的那条不扫：' + JSON.stringify(collected))
+assert.equal(store.appendEvents(collected), 1)
+assert.equal(store.findById(store.eventId('s2', 2, collected[0].quote)).used, false)
+console.log('65. 采集整段对话：水位前不扫，纠偏落进池子')
+
+// 66. 采集入口：第一次只写水位不回填，之后只扫新的
+store.writeEvents([])
+store.writeWatermark(null)
+assert.equal(store.readWatermark(), null, '先确认水位是空的')
+const first = store.collectCorrections({ session: 's3', idx: 1, text: '我说过先举例再给结论', at: '2026-11-05T09:00:00.000Z' })
+assert.equal(first.reason, 'just-enabled', '第一次调用只开闸，不扫历史')
+assert.equal(store.listCorrections({}).total, 0, '启用那一刻之前的消息一条都不回填')
+const older = store.collectCorrections({ session: 's3', idx: 2, text: '你又错了', at: '2026-11-05T08:00:00.000Z', isReply: true })
+assert.equal(older.reason, 'before-watermark', '比水位旧的消息不扫')
+const fresh = store.collectCorrections({ session: 's3', idx: 3, text: '你又错了，这次不是技术问题', at: '2026-11-05T10:00:00.000Z', isReply: true })
+assert.equal(fresh.collected, 1, '水位之后的新消息要扫：' + JSON.stringify(fresh))
+assert.equal(store.readWatermark().lastScannedAt, '2026-11-05T10:00:00.000Z', '扫完要推水位')
+assert.equal(store.collectCorrections({ session: 's3', idx: 4, text: '今天天气不错', at: '2026-11-05T11:00:00.000Z' }).reason, 'no-signal')
+console.log('66. 采集入口：开闸不回填，只扫新消息')
+
+console.log('\n21 项全部通过')
 process.exit(0)
