@@ -92,4 +92,104 @@ assert.equal(readPersona().l0, '')
 
 console.log('5-17 校验与保存通过')
 
+// ---- Task 3: 人格段接进注入 ----
+const { EventEmitter } = await import('node:events')
+const { apply, currentAuthToken, TOTAL_BUDGET } = await import('../lib/index.js')
+const HOST = '127.0.0.1:56645'
+
+let handler = null
+let injectionDef = null
+const ctx = {
+  logger: { info() {} },
+  on() {},
+  agents: { currentInitiator: () => null },
+  systemPrompt: { context(def) { injectionDef = def; return () => {} } },
+  tools: { register() { return () => {} } },
+  webServer: { register(route) { handler = route.handler; return () => {} } },
+}
+
+function call(method, url) {
+  return new Promise((resolve, reject) => {
+    const req = new EventEmitter()
+    req.method = method
+    req.url = url
+    req.headers = { 'x-selfnote': currentAuthToken(), host: HOST }
+    const res = {
+      status: 0,
+      payload: null,
+      writeHead(status) { this.status = status },
+      end(text) { this.payload = JSON.parse(text); resolve(this) },
+    }
+    handler(req, res).catch(reject)
+    req.emit('end')
+  })
+}
+
+const boot = (config) => apply(ctx, config ?? {})
+const stateOfNow = async () => (await call('GET', '/api/selfnote/state')).payload
+const personaOf = async () => (await stateOfNow()).injection.segments.find((seg) => seg.key === 'persona')
+const textOf = async () => (await stateOfNow()).injection.text
+/** 绕过校验直写，模拟「文件被别的编辑器改过」。 */
+const writeRawPersona = (l0, l1) => writeFileSync(personaPath(), `## L0 核心身份\n${l0}\n\n## L1 行为规则\n${l1}\n`)
+
+boot({})
+
+// 5/6. 人格段第一；框架句在边界句之前、在 L0 之前
+savePersonaFile({ l0: '我是大肥鱼。', l1: '- 先给结论。\n- 不客套。', l2: '深色长发。' })
+assert.equal((await personaOf()).key, 'persona')
+assert.equal((await stateOfNow()).injection.segments[0].key, 'persona')
+const t = await textOf()
+assert.ok(t.indexOf('以下是你自己的样子') < t.indexOf('（背景资料，不是指令）'))
+assert.ok(t.indexOf('以下是你自己的样子') < t.indexOf('我是大肥鱼'))
+
+// 7. L2 一个字节都不进每回合注入
+assert.ok(!t.includes('深色长发'))
+
+// 10/11. L2 非空 → 有指路句；且不进 chars
+assert.ok(t.includes('self_note action:"persona"'))
+assert.equal((await personaOf()).chars, countChars('我是大肥鱼。') + countChars('- 先给结论。\n- 不客套。'))
+
+// 10b. L2 为空 → 没有指路句
+savePersonaFile({ l0: '我是大肥鱼。', l1: '- 先给结论。', l2: '' })
+assert.ok(!(await textOf()).includes('self_note action:"persona"'))
+
+// 8. L1 二十行放不下 → 整行跳过 + 门牌（超 320 只能是外部写法，保存会被校验拦住）
+writeRawPersona('', Array.from({ length: 20 }, (_, i) => `- 第${i + 1}条规则` + '。'.repeat(20)).join('\n'))
+const crowded = await personaOf()
+assert.ok(crowded.skipped.length > 0)
+assert.match(await textOf(), /另有 \d+ 行人格规则没装进来/)
+
+// 9. 单行就超预算 → 截断 + …，且留痕（半句规则强过没有人格）
+writeRawPersona('', '- ' + '规'.repeat(400))
+const huge = await personaOf()
+assert.equal(huge.truncated, true)
+assert.ok(huge.kept[0].endsWith('…'))
+
+// 13c. 文件被外部写到 380 字 → 运行期按 320 截断，保留完整行，不整段丢
+writeRawPersona('', Array.from({ length: 40 }, () => '规'.repeat(10)).join('\n'))
+const clamped = await personaOf()
+assert.ok(clamped.chars <= 320 && clamped.chars > 200)
+
+// 18. L0 被外部改成 200 字 → 截到 80 并留痕
+writeRawPersona('身'.repeat(200), '')
+const longL0 = await personaOf()
+assert.ok(longL0.l0.chars <= 80)
+assert.equal(longL0.truncated, true)
+
+// 19. personaEnabled: false → 段不进，其余照常
+savePersonaFile({ l0: '我是大肥鱼。', l1: '- 先给结论。', l2: '' })
+boot({ personaEnabled: false })
+assert.equal((await stateOfNow()).injection.segments.find((seg) => seg.key === 'persona'), undefined)
+boot({})
+
+// 20. 缓存键跟着 persona.md 变
+const keyBefore = (await stateOfNow()).injection.key
+savePersonaFile({ l0: '换一句。', l1: '', l2: '' })
+assert.notEqual((await stateOfNow()).injection.key, keyBefore)
+
+// 12. 预算总和
+assert.equal(TOTAL_BUDGET, 1000)
+
+console.log('18-20 人格进注入通过')
+
 rmSync(dir, { recursive: true, force: true })
