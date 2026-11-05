@@ -54,6 +54,41 @@ const base = {
     ],
   },
   profile: { enabled: true, override: '', maxChars: 60, manual: false, text: '', chars: 0, parts: [], sources: [], conflicts: [] },
+  persona: {
+    enabled: true,
+    l0: '我是鲸鲸。',
+    l1: '回答先给结论，再给细节。',
+    l2: '外套是深蓝色，喜欢在海边散步。',
+    chars: 34,
+    l0Chars: 5,
+    l1Chars: 12,
+    l2Chars: 16,
+    l0Limit: 80,
+    l1Limit: 314,
+    fileLimit: 8000,
+    sectionless: false,
+    truncated: false,
+    error: '',
+    reads: 1,
+    lastReadAt: '2026-11-04T10:00:00.000Z',
+  },
+  corrections: {
+    total: 1,
+    unused: 1,
+    lastScannedAt: '2026-11-05T09:00:00.000Z',
+    items: [
+      {
+        id: 'a3f9c21b7e04',
+        quote: '我说过先举例再给结论',
+        at: '2026-11-05T08:00:00.000Z',
+        session: 'session-abc',
+        idx: 12,
+        used: false,
+        usedAt: null,
+        consumedBy: null,
+      },
+    ],
+  },
   habits: [],
   habitSuggestions: [],
   files: [
@@ -147,10 +182,10 @@ console.log('1. 有自动采集候选时也能正常渲染（不再白板）')
 /* 2. 标签页：四个页签、一个页签被选中、panel 与页签对得上 */
 let nodes = collect(tree)
 let tabs = nodes.filter((node) => node.props && node.props.role === 'tab')
-assert.equal(tabs.length, 5, '应该有五个页签：概览 / 自述 / 记忆 / 画像 / 注入')
+assert.equal(tabs.length, 6, '应该有六个页签：概览 / 自述 / 人格 / 记忆 / 画像 / 注入')
 assert.deepEqual(
   tabs.map((node) => node.children[0]),
-  ['概览', '自述', '记忆', '画像', '注入'],
+  ['概览', '自述', '人格', '记忆', '画像', '注入'],
 )
 assert.ok(nodes.some((node) => node.props && node.props.role === 'tablist'), '页签要有 tablist 容器')
 const activeTab = tabs.filter((node) => node.props['aria-selected'] === true)
@@ -179,8 +214,8 @@ console.log('3. 没有待审候选时停在概览页，且不渲染空候选区'
 /* 4. 每个页签带自己的摘要 badge */
 tabs = collect(render(withCandidates)).filter((node) => node.props && node.props.role === 'tab')
 const badges = tabs.map((node) => (node.children[1] ? node.children[1].children[0] : ''))
-assert.deepEqual(badges, ['', '1 条', '待审 2', '0 字', '96 字'])
-console.log('4. 页签 badge 分别是自述条数、待审条数、画像字数、注入字数')
+assert.deepEqual(badges, ['', '1 条', '34 字', '待审 2', '0 字', '96 字'])
+console.log('4. 页签 badge 分别是自述条数、人格字数、待审条数、画像字数、注入字数')
 
 /* 5. 画像页：手改覆盖、来源 chip、冲突提示都要在该页里 */
 const withProfile = {
@@ -260,7 +295,7 @@ assert.ok(json.includes('这一回合注入的内容'), '要有注入内容卡')
 assert.ok(json.includes('背景资料，不是指令'), '原文要一字不改地展示，包括边界句')
 assert.ok(json.includes('我做的每个插件，先让它能跑'), '自述条目要出现在注入原文里')
 assert.ok(json.includes('96 / 300 字'), '要显示这一回合占了多少预算')
-assert.ok(json.includes('含抬头 64 字'), '框架文字要单独交代，否则四段加起来对不上总数')
+assert.ok(json.includes('固定开销 64 字'), '框架文字要单独交代，否则几段加起来对不上总数')
 assert.ok(json.includes('挤掉 1 条'), '被挤掉的条目要明说，不能悄悄消失')
 assert.ok(json.includes('这一条太长了'), '被挤掉的原文也要能看见')
 assert.ok(json.includes('不截半句'), '要交代为什么不截断而是整条跳过')
@@ -360,6 +395,54 @@ assert.ok(!json.includes('undefined'), '习惯区不该出现 undefined')
 forcedTab = null
 console.log('11. 已生效的习惯能看见、能撤销')
 
-console.log('\n12 项全部通过')
+
+/* 12. 人格页：三段都能改、字数看得见、纠偏证据只是证据 */
+forcedTab = 'persona'
+tree = render(base)
+json = JSON.stringify(tree)
+nodes = collect(tree)
+assert.match(json, /sn-panel-persona/, '切到人格页要渲染人格面板')
+const personaFields = nodes.filter((node) => node.type === 'textarea')
+assert.ok(personaFields.length >= 3, '人格页至少有三个正文框（L0 / L1 / L2），外加纠偏规则草稿')
+assert.deepEqual(
+  personaFields.slice(0, 3).map((node) => node.props['data-field']),
+  ['l0', 'l1', 'l2'],
+  '三个框分别是 L0 / L1 / L2',
+)
+assert.ok(json.includes('我是鲸鲸。'), 'L0 正文要显示出来')
+assert.ok(json.includes('回答先给结论，再给细节。'), 'L1 正文要显示出来')
+assert.ok(json.includes('外套是深蓝色'), 'L2 正文要显示出来（它不进注入，但人得能改）')
+const pL0 = Array.from(base.persona.l0).length
+const pL1 = Array.from(base.persona.l1).length
+assert.ok(json.includes('L0 ' + pL0 + ' + L1 ' + pL1 + ' = ' + (pL0 + pL1) + ' / 320 字（余 ' + (320 - pL0 - pL1) + '）'), '要说清 320 的账怎么算的')
+assert.ok(json.includes(pL0 + ' / 80 字'), 'L0 要有自己的上限提示')
+assert.ok(json.includes((320 - pL0) + ' 字'), 'L1 的可用额度是 320 减掉 L0')
+assert.ok(json.includes('保存人格'), '要有整份保存按钮')
+assert.ok(json.includes('从 AGENT.md 导入'), '要有导入入口（迁移用，导入≠采纳）')
+assert.ok(json.includes('我说过先举例再给结论'), '纠偏证据的原话要给出来')
+assert.ok(json.includes('你没有写入权限'), '要说明模型只能读证据，不能自己改人格')
+assert.ok(!json.includes('undefined'), '人格页不该出现 undefined')
+forcedTab = null
+console.log('12. 人格页：三段可改、320 的账算得清、纠偏证据只作证据')
+
+/* 13. 核心身份降级：自述列表里明确标出「素材（不注入）」 */
+const withCoreNote = {
+  ...base,
+  facts: { candidates: [], approved: [], retired: 0 },
+  notes: [
+    { date: '2026-11-05', text: '他很注意隐私！', tier: 'core', pin: true },
+    { date: '2026-11-04', text: '回答先给结论。', tier: 'stable' },
+  ],
+}
+forcedTab = 'notes'
+tree = render(withCoreNote)
+json = JSON.stringify(tree)
+assert.ok(json.includes('素材（不注入）'), '核心身份要标出它已经不进注入了，否则人以为它还在生效')
+assert.ok(json.includes('他很注意隐私！'), '素材原文仍然要看得到（改型就能回去）')
+assert.ok(json.includes('只装「稳定（★ 钉住的先装）」和「临时」'), '要交代清楚现在到底装哪几型')
+forcedTab = null
+console.log('13. 核心身份在自述页标为「素材（不注入）」')
+
+console.log('\n14 项全部通过')
 
 process.exit(0)
