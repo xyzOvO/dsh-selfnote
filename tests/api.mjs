@@ -240,14 +240,12 @@ r = await call('POST', '/api/selfnote/habit', { text: '回答先给结论', stat
 assert.equal(r.payload.habits.length, 1, '还能再升回来')
 console.log('13. 习惯升上去进注入、能撤销、能再升回来')
 
-
 /* 14. 退役后立刻从注入里消失 */
 r = await call('POST', '/api/selfnote/fact', { id: staged.fact.id, status: 'retired' })
 assert.equal(r.status, 200)
 assert.equal(r.payload.facts.approved.length, 0)
 assert.ok(!injectionDef.text().includes('先结论'))
 console.log('14. 退役 → 注入里立刻消失')
-
 
 /* 15. 审核留痕：改状态要记下谁、从哪、从什么变成什么 */
 const factsFile = join(dir, 'memory', 'facts.jsonl')
@@ -579,7 +577,7 @@ console.log('27. 心跳：注入一次就落一次盘')
   r = await call('GET', '/api/selfnote/export')
   assert.equal(r.status, 200)
   assert.equal(r.payload.app, 'dsh-selfnote')
-  assert.equal(r.payload.v, 1)
+  assert.equal(r.payload.v, 2, '带人格的导出是 v2')
   assert.equal(Array.isArray(r.payload.facts), true)
   assert.equal(Array.isArray(r.payload.notes), true)
   assert.equal(r.payload.config.halfLifeDays, 30)
@@ -854,4 +852,41 @@ assert.equal(keys[keys.length - 1], 'beat', '心跳永远排最后')
 console.log('52. state 带人格与纠偏，体检八项')
 
 console.log('\n52 项全部通过（data dir: ' + dir + '）')
+/* 53. 人格跟着迁移包走：目标空就采用，两边都有且不同就落旁路文件 */
+{
+  // 先把本机的人格清掉：目标为空时才谈得上「采用」
+  r = await call('POST', '/api/selfnote/persona', { l0: '', l1: '', l2: '' })
+  assert.equal(r.status, 200, JSON.stringify(r.payload))
+  assert.equal(r.payload.persona.chars, 0)
+
+  r = await call('POST', '/api/selfnote/import', {
+    bundle: { app: 'dsh-selfnote', v: 2, persona: { l0: '我是鲸鲸。', l1: '回答先给结论。', l2: '外套深蓝。' } },
+  })
+  assert.equal(r.status, 200, JSON.stringify(r.payload))
+  assert.equal(r.payload.import.persona.action, 'adopt', '本机原来没有人格，就该采用导入的')
+  assert.equal(r.payload.persona.l0, '我是鲸鲸。')
+  assert.equal(r.payload.persona.l1, '回答先给结论。')
+
+  // 再来一份不一样的：不许覆盖，要落 persona.imported-*.md
+  r = await call('POST', '/api/selfnote/import', {
+    bundle: { app: 'dsh-selfnote', v: 2, persona: { l0: '我是别人。', l1: '', l2: '' } },
+  })
+  assert.equal(r.status, 200, JSON.stringify(r.payload))
+  assert.equal(r.payload.import.persona.action, 'conflict', '两边都有且不同，不许覆盖')
+  assert.match(r.payload.import.persona.file, /persona.imported-.*.md$/, '冲突的那份要落旁路文件，别丢也不要盖')
+  assert.equal(r.payload.persona.l0, '我是鲸鲸。', '本机那份必须原封不动')
+  const { existsSync, readFileSync } = await import('node:fs')
+  assert.equal(existsSync(r.payload.import.persona.file), true, '旁路文件要真的写出来')
+  assert.ok(readFileSync(r.payload.import.persona.file, 'utf8').includes('我是别人。'), '旁路文件里是导入的那份')
+
+  // 一模一样：既不重复写盘，也不报冲突
+  r = await call('POST', '/api/selfnote/import', {
+    bundle: { app: 'dsh-selfnote', v: 2, persona: { l0: '我是鲸鲸。', l1: '回答先给结论。', l2: '外套深蓝。' } },
+  })
+  assert.equal(r.payload.import.persona.action, 'same', '一模一样就别再写一遍')
+  console.log('53. 人格迁移：空则采用、同则跳过、异则落旁路文件，本机那份不被盖')
+}
+
+console.log('\n53 项全部通过（data dir: ' + dir + '）')
+
 process.exit(0)

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { buildBundle, mergeBundle, validateBundle, BUNDLE_VERSION } from '../lib/transfer.js'
+import { buildBundle, mergeBundle, validateBundle, mergePersona, BUNDLE_VERSION } from '../lib/transfer.js'
 
 /* 1. 导出：只带能带走的东西，配置只挑可调项 */
 const bundle = buildBundle({
@@ -94,4 +94,46 @@ assert.deepEqual(
 )
 console.log('7. 空导入无害；习惯状态只认 active')
 
-console.log('\n8 项全部通过')
+
+/* 9. 人格跟着迁移包走：v2 带三段，纠偏候选不带 */
+const withPersona = buildBundle({
+  notes: [],
+  facts: [],
+  habits: [],
+  config: { heading: '记忆（我写的）', personaEnabled: false, tempTtlDays: 21, 内部字段: '不该带出去' },
+  persona: { l0: '我是鲸鲸。', l1: '回答先给结论。', l2: '外套深蓝。' },
+  now: new Date('2026-11-05T00:00:00Z'),
+})
+assert.equal(withPersona.v, 2, '带人格的包是 v2')
+assert.deepEqual(withPersona.persona, { l0: '我是鲸鲸。', l1: '回答先给结论。', l2: '外套深蓝。' })
+assert.equal(withPersona.config.personaEnabled, false, '人格开关要跟着走')
+assert.equal(withPersona.config.tempTtlDays, 21, '临时保质期也要跟着走')
+assert.equal(withPersona.config.内部字段, undefined)
+assert.equal(withPersona.corrections, undefined, '纠偏候选是本地素材，不往外带')
+console.log('9. 导出带人格三段与两个新配置项，不带纠偏候选')
+
+/* 10. 校验：v1 老包照收，v3 拒收，persona 形状不对当场说清 */
+assert.equal(validateBundle({ app: 'dsh-selfnote', v: 1 }), null, '老包（v1）仍然能导入')
+assert.equal(validateBundle({ app: 'dsh-selfnote', v: 2 }), null)
+assert.match(validateBundle({ app: 'dsh-selfnote', v: 3 }), /更新的版本/)
+assert.match(validateBundle({ app: 'dsh-selfnote', v: 2, persona: 'abc' }), /persona 不是对象/)
+assert.match(validateBundle({ app: 'dsh-selfnote', v: 2, persona: { l0: 1 } }), /persona.l0 不是字符串/)
+assert.equal(validateBundle({ app: 'dsh-selfnote', v: 2, persona: { l0: 'a', l1: '', l2: '' } }), null)
+console.log('10. 校验：老包照收，坏人格当场拒绝')
+
+/* 11. 人格合并：空了不写、目标空就用导入的、同上跳过、不同不覆盖 */
+assert.deepEqual(mergePersona(null, null), { action: 'none' })
+assert.deepEqual(mergePersona({ l0: '  ', l1: '', l2: '' }, null), { action: 'none' }, '全空等于没带')
+assert.deepEqual(mergePersona({ l0: '我是鲸鲸。', l1: '', l2: '' }, null), {
+  action: 'adopt',
+  persona: { l0: '我是鲸鲸。', l1: '', l2: '' },
+})
+const samePersona = mergePersona({ l0: '我是鲸鲸。', l1: 'a', l2: '' }, { l0: '我是鲸鲸。', l1: 'a', l2: '' })
+assert.equal(samePersona.action, 'same', '一模一样就别再写一遍盘')
+const clash = mergePersona({ l0: '我是鲸鲸。', l1: 'b', l2: '' }, { l0: '我是鲸鲸。', l1: 'a', l2: '' })
+assert.equal(clash.action, 'conflict', '两边都有人格且不一样：不许覆盖')
+assert.deepEqual(clash.persona, { l0: '我是鲸鲸。', l1: 'b', l2: '' }, '冲突时把导入的那份原样带回去落旁路文件')
+console.log('11. 人格合并：不覆盖，冲突留给旁路文件')
+
+console.log('\n11 项全部通过')
+
