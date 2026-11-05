@@ -851,7 +851,6 @@ if (keys.length === BASE.length + 1) assert.ok(keys.includes('index-failed'), '�
 assert.equal(keys[keys.length - 1], 'beat', '心跳永远排最后')
 console.log('52. state 带人格与纠偏，体检八项')
 
-console.log('\n52 项全部通过（data dir: ' + dir + '）')
 /* 53. 人格跟着迁移包走：目标空就采用，两边都有且不同就落旁路文件 */
 {
   // 先把本机的人格清掉：目标为空时才谈得上「采用」

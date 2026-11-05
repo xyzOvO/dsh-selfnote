@@ -193,3 +193,4 @@ assert.equal(TOTAL_BUDGET, 1000)
 console.log('18-20 人格进注入通过')
 
 rmSync(dir, { recursive: true, force: true })
+console.log('\n20 项全部通过')
