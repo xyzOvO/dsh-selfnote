@@ -924,6 +924,21 @@ assert.equal(rp.status, 400, '空对象不能把整份人格抹掉')
 assert.equal(readPersona().l1, '只改第二段。')
 console.log('55. 部分字段保存不清空其它段，空对象被拒')
 
-console.log('\n55 项全部通过（data dir: ' + dir + '）')
+/* 56. 界面要用的三个数：半衰期、L2 上限、纠偏游标 —— 缺一个界面就得自己瞎猜 */
+rp = await call('GET', '/api/selfnote/state')
+assert.equal(rp.payload.halfLifeDays, 30, '半衰期要出现在 /state 里')
+assert.ok(typeof rp.payload.persona.l2Limit === 'number' && rp.payload.persona.l2Limit >= 0, 'L2 上限按 8000 减已用来算')
+assert.ok('nextCursor' in rp.payload.corrections, '纠偏翻页要有游标')
+rp = await call('POST', '/api/selfnote/config', { halfLifeDays: 45, profileMaxChars: 90 })
+assert.equal(rp.status, 200)
+assert.equal(rp.payload.halfLifeDays, 45, '半衰期改完要真的落到 state')
+assert.equal(rp.payload.profile.maxChars, 90, '画像上限改完要真的落到 state')
+rp = await call('POST', '/api/selfnote/config', { halfLifeDays: 999 })
+assert.equal(rp.status, 400, '越界的半衰期要被拒')
+rp = await call('POST', '/api/selfnote/config', { halfLifeDays: 30, profileMaxChars: 110 })
+assert.equal(rp.status, 200)
+console.log('56. 半衰期/画像上限/纠偏游标都在 state 里，越界被拒')
+
+console.log('\n56 项全部通过（data dir: ' + dir + '）')
 
 process.exit(0)

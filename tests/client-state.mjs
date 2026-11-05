@@ -31,9 +31,10 @@ const base = {
   configFile: 'C:/x/config.json',
   maxEntryChars: 600,
   tempTtlDays: 14,
+  halfLifeDays: 30,
   memory: { facts: 2, approved: 1, candidates: 1, retired: 0, habits: 0, sessions: 10, cache: 0, root: 'C:/x/memory' },
   runtime: { node: '24.21.0', electron: '44.7.0', platform: 'win32', sqlite: true },
-  index: { present: true, fresh: false, sessions: 270, disk: 301, missing: 31, records: 1609, terms: 87362, bytes: 8760728, builtAt: '2026-11-02T19:50:42.946Z', failed: 0 },
+  index: { present: true, fresh: false, enabled: true, sessions: 270, disk: 301, missing: 31, records: 1609, terms: 87362, bytes: 8760728, builtAt: '2026-11-02T19:50:42.946Z', failed: 0 },
   budget: { notes: 20, profile: 0, facts: 12, habits: 0, total: 32, limit: 300 },
   injection: {
     enabled: true,
@@ -65,6 +66,7 @@ const base = {
     l2Chars: 16,
     l0Limit: 80,
     l1Limit: 314,
+    l2Limit: 7980,
     fileLimit: 8000,
     sectionless: false,
     truncated: false,
@@ -76,6 +78,7 @@ const base = {
     total: 1,
     unused: 1,
     lastScannedAt: '2026-11-05T09:00:00.000Z',
+    nextCursor: 'cursor-2',
     items: [
       {
         id: 'a3f9c21b7e04',
@@ -523,6 +526,52 @@ assert.equal(noticeWrap.props['aria-live'], 'polite')
 forcedNotice = null
 console.log('17. 提示条贴顶且有 aria-live')
 
-console.log(String.fromCharCode(10) + '17 项全部通过')
+
+/* 18. 索引开关：状态看得见，按钮按状态换 */
+forcedTab = 'overview'
+tree = render(base)
+json = JSON.stringify(tree)
+assert.ok(json.includes('检索开关'), '要说清索引到底开没开')
+assert.ok(json.includes('已启用'))
+assert.ok(json.includes('关闭索引'), '开着的时候按钮该是「关闭索引」')
+const offIndex = { ...base, index: { ...base.index, enabled: false } }
+tree = render(offIndex)
+json = JSON.stringify(tree)
+assert.ok(json.includes('启用索引'), '关着的时候按钮该是「启用索引」')
+const noIndex = { ...base, index: { ...base.index, present: false, enabled: false } }
+tree = render(noIndex)
+const enableBtn = collect(tree).find((node) => node.children && node.children[0] === '启用索引')
+assert.equal(enableBtn.props.disabled, true, '还没建索引时不该让人点启用（服务端会 400）')
+console.log('18. 索引开关看得见、按钮随状态切换')
+
+/* 19. 纠偏证据：总数、翻页、丢弃都在，别让人只能看着 */
+forcedTab = 'persona'
+tree = render(base)
+json = JSON.stringify(tree)
+assert.ok(json.includes('加载更多'), '服务端还有下一页时要给翻页入口')
+assert.ok(json.includes('丢弃选中的证据'), '没用的证据要能丢掉')
+const discardBtn = collect(tree).find((node) => node.children && node.children[0] === '丢弃选中的证据')
+assert.equal(discardBtn.props.disabled, true, '没勾证据时丢弃按钮要灰着')
+assert.ok(json.includes('纠偏候选（1 条'), '标题用总数，不是当前页条数')
+forcedTab = null
+console.log('19. 纠偏证据有总数、翻页与丢弃')
+
+/* 20. 半衰期与画像上限：界面上能改；L2 上限跟服务端同一把尺子 */
+tree = render(base)
+nodes = collect(tree)
+const halfInput = nodes.find((node) => node.props && String(node.props['aria-label'] || '').includes('半衰期'))
+assert.ok(halfInput, '半衰期不该只剩改 config.json 这一条路')
+assert.equal(halfInput.props.value, '30')
+const pmInput = nodes.find((node) => node.props && String(node.props['aria-label'] || '').includes('画像上限'))
+assert.ok(pmInput, '画像上限也要能在这儿改')
+assert.equal(pmInput.props.value, String(base.profile.maxChars))
+forcedTab = 'persona'
+tree = render(base)
+const l2Field = collect(tree).find((node) => node.type === 'textarea' && node.props['data-field'] === 'l2')
+assert.equal(l2Field.props.maxLength, base.persona.l2Limit, 'L2 的 maxLength 直接用服务端算的 l2Limit')
+forcedTab = null
+console.log('20. 半衰期/画像上限能改，L2 上限与服务端一致')
+
+console.log(String.fromCharCode(10) + '20 项全部通过')
 
 process.exit(0)
