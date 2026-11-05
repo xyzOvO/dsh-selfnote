@@ -909,6 +909,10 @@ console.log('52. state 带人格与纠偏，体检八项')
 /* 55. 只给一段不会清空别的；三段都不给直接拒绝 */
 rp = await call('POST', '/api/selfnote/persona', { l0: '我是大肥鱼。', l1: '先举例再给结论。', l2: '外套深蓝。' })
 assert.equal(rp.status, 200)
+// 设置页拿到响应会直接 apply 成整份 state：只回 {ok, consumed} 会把页面刷成空白
+assert.ok(rp.payload.budget, '保存人格后要回整份 state（budget）')
+assert.ok(rp.payload.notes, '保存人格后要回整份 state（notes）')
+assert.ok(rp.payload.corrections, '保存人格后要回整份 state（corrections）')
 rp = await call('POST', '/api/selfnote/persona', { l1: '只改第二段。' })
 assert.equal(rp.status, 200)
 let partial = readPersona()
