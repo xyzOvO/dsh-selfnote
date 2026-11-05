@@ -110,8 +110,9 @@ assert.equal(tree.props.className, 'sn-root')
 const inner = tree.children[0]
 assert.equal(inner.type, 'div')
 assert.equal(inner.props.className, 'sn-loading')
-assert.match(inner.children.join(''), /重启 DSH/)
-console.log('2. 没有状态时给出「重启 DSH」提示')
+assert.match(inner.children.join(''), /读取中/)
+assert.doesNotMatch(inner.children.join(''), /重启 DSH/, '首帧不该先闪一句重启')
+console.log('2. 没有状态时先显示「读取中…」，不闪「重启 DSH」')
 
 console.log('\n2 项全部通过')
 process.exit(0)

@@ -122,15 +122,21 @@ let current = withCandidates
 let useStateCall = 0
 // 点页签要模拟交互；这个假 React 只能按调用顺序塞值 —— 顺序变了下面的断言会立刻炸
 let forcedTab = null
+let forcedNotice = null
+let forcedBusy = null
+let showRetired = false
 const React = {
   createElement: (type, props, ...children) => ({ type, props: props || {}, children: children.flat() }),
   useState(initial) {
     useStateCall += 1
     if (useStateCall === 1) return [current, () => {}]
+    if (forcedNotice !== null && useStateCall === 2) return [forcedNotice, () => {}]
+    if (forcedBusy !== null && useStateCall === 3) return [forcedBusy, () => {}]
+    if (showRetired && useStateCall === 26) return [true, () => {}]
     if (forcedTab !== null && useStateCall === 9) return [forcedTab, () => {}]
     if (forcedTab !== null && useStateCall === 10) return [true, () => {}]
     // 第 21 个是「临时自述保质期」：从 state 里取，好断言它真的渲染出来了
-    if (useStateCall === 21) return [String(current.tempTtlDays ?? ''), () => {}]
+    if (useStateCall === 21) return [String((current && current.tempTtlDays) ?? ''), () => {}]
     return [typeof initial === 'function' ? null : initial, () => {}]
   },
   useEffect() {},
@@ -445,6 +451,78 @@ assert.ok(json.includes('只装「稳定（★ 钉住的先装）」和「临时
 forcedTab = null
 console.log('13. 核心身份在自述页标为「素材（不注入）」')
 
-console.log('\n14 项全部通过')
+
+/* 14. 已退役：默认收起，条数按总数显示，只列最近几条要说清 */
+const withRetired = {
+  ...base,
+  facts: {
+    candidates: [],
+    approved: [{ id: 'f1', text: '索引只存词元', status: 'approved' }],
+    retired: [{ id: 'r1', text: '以前说要用 pnpm', status: 'retired', retiredAt: '2026-11-04' }],
+    retiredCount: 3,
+  },
+}
+forcedTab = 'memory'
+tree = render(withRetired)
+json = JSON.stringify(tree)
+assert.ok(json.includes('已退役（3）'), '标题按总数算，不是按数组长度')
+assert.ok(json.includes('这里只列最近 1 条'), '数组被截到 20 条时要说明只列了一部分')
+assert.ok(json.includes('展开这 1 条'), '要能展开')
+assert.ok(!json.includes('以前说要用 pnpm'), '收起时不该把退役正文铺出来')
+console.log('14. 已退役默认收起、总数与列出的条数分得清')
+
+/* 15. 展开已退役：正文、退役时间、恢复按钮都在，恢复走 /fact approved */
+showRetired = true
+tree = render(withRetired)
+json = JSON.stringify(tree)
+assert.ok(json.includes('以前说要用 pnpm'), '展开后要能看到原文')
+assert.ok(json.includes('退役于 2026-11-04'), '要标退役时间')
+assert.ok(json.includes('恢复'), '要有恢复入口')
+assert.ok(json.includes('收起'), '展开后按钮要变成收起')
+const restoreBtn = collect(tree).find(
+  (node) => node.type === 'button' && node.children[0] === '恢复',
+)
+assert.ok(restoreBtn, '恢复按钮要是个真按钮')
+assert.equal(typeof restoreBtn.props.onClick, 'function', '恢复按钮要能点')
+showRetired = false
+forcedTab = null
+console.log('15. 展开已退役：原文、时间、恢复按钮都在')
+
+/* 16. 读不到状态：说人话 + 给重试，不再一句「重启 DSH 试试」糊过去 */
+forcedBusy = ''
+forcedNotice = { kind: 'error', text: '读不到状态：HTTP 403（令牌不对）' }
+tree = render(null)
+json = JSON.stringify(tree)
+assert.ok(json.includes('读不到状态：HTTP 403'), '要把真实原因显示出来')
+assert.ok(json.includes('重试'), '要给重试按钮')
+assert.ok(!json.includes('重启 DSH 试试'), '403/404 重启也治不了，别再指向重启')
+const retryBtn = collect(tree).find((node) => node.children[0] === '重试')
+assert.equal(retryBtn.props.disabled, false, '没在忙的时候重试要能点')
+const alertNode = collect(tree).find((node) => node.props && node.props.role === 'alert')
+assert.ok(alertNode, '读失败要 role=alert，别让读屏器漏掉')
+forcedBusy = 'load'
+forcedNotice = null
+tree = render(null)
+json = JSON.stringify(tree)
+assert.ok(json.includes('读取中'), '首帧在忙就显示读取中，不闪错误')
+assert.ok(!json.includes('重启 DSH 试试'))
+forcedBusy = null
+forcedNotice = null
+console.log('16. 读不到状态时给原因和重试，首帧显示读取中')
+
+/* 17. 提示条贴顶 + aria-live：长页操作完也看得见 */
+forcedNotice = { kind: 'ok', text: '已保存' }
+tree = render(base)
+nodes = collect(tree)
+const noticeWrap = nodes.find(
+  (node) => node.props && String(node.props.className || '').includes('sn-notice-wrap'),
+)
+assert.ok(noticeWrap, '提示条要有独立容器（贴顶用）')
+assert.equal(noticeWrap.props.role, 'status', '提示条要能被读屏器念出来')
+assert.equal(noticeWrap.props['aria-live'], 'polite')
+forcedNotice = null
+console.log('17. 提示条贴顶且有 aria-live')
+
+console.log(String.fromCharCode(10) + '17 项全部通过')
 
 process.exit(0)
