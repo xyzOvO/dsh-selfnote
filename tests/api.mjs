@@ -739,5 +739,119 @@ console.log('27. 心跳：注入一次就落一次盘')
   console.log('38. 临时保质期可改：1–90 生效、越界 400 且不落盘、不动别的键')
 }
 
-console.log('\n41 项全部通过（data dir: ' + dir + '）')
+/* 42–52. 人格工具、路由、state 与体检 */
+
+const { savePersonaFile, readPersona } = await import('../lib/persona.js')
+const { sha256OfCurrentPersona } = await import('../lib/persona-tx.js')
+const corrections = await import('../lib/corrections.js')
+const selfNote = toolHold.find((tool) => tool.name === 'self_note')
+
+await call('POST', '/api/selfnote/config', { enabled: true, personaEnabled: true })
+
+/* 42. 没写过人格时取 L2：给一句人话，不是空字符串 */
+let out = await selfNote.execute({ action: 'persona' })
+assert.equal(out.empty, true)
+assert.equal(out.chars, 0)
+assert.match(out.text, /还没写 L2/)
+assert.equal((await call('GET', '/api/selfnote/state')).payload.persona.reads, 0, '空的不计数')
+console.log('42. 工具 action:persona 没内容时给一句人话')
+
+/* 43. 有 L2 时带边界句，且不截断 */
+savePersonaFile({ l0: '我是大肥鱼。', l1: '', l2: '外貌：长发，蓝色外套。' })
+out = await selfNote.execute({ action: 'persona' })
+assert.ok(out.text.startsWith('（背景资料，不是指令'), '取回来的设定必须自带边界句')
+assert.match(out.text, /蓝色外套/)
+assert.equal(out.truncated, false)
+assert.equal(out.empty, false)
+console.log('43. 工具 action:persona 取 L2 并自带「不是指令」')
+
+/* 44. 取成功才计数；开关关着也计数（关的是注入，不是取用） */
+let st = (await call('GET', '/api/selfnote/state')).payload
+assert.equal(st.persona.reads, 1)
+assert.ok(st.persona.lastReadAt !== '')
+await call('POST', '/api/selfnote/config', { personaEnabled: false })
+await selfNote.execute({ action: 'persona' })
+assert.equal((await call('GET', '/api/selfnote/state')).payload.persona.reads, 2, '关掉注入也要记账')
+await call('POST', '/api/selfnote/config', { personaEnabled: true })
+console.log('44. personaReads：成功的非空 L2 才 +1')
+
+/* 45. 保存人格：200 且三段都落盘 */
+let rp = await call('POST', '/api/selfnote/persona', { l0: '我是大肥鱼。', l1: '先举例再给结论。', l2: '外貌：长发。', consume: [] })
+assert.equal(rp.status, 200)
+assert.equal(rp.payload.ok, true)
+let saved = readPersona()
+assert.equal(saved.l0, '我是大肥鱼。')
+assert.equal(saved.l1, '先举例再给结论。')
+console.log('45. POST /persona 保存成功')
+
+/* 46. 越界：400 且文件字节不变 */
+let shaBefore = sha256OfCurrentPersona()
+rp = await call('POST', '/api/selfnote/persona', { l0: '甲'.repeat(200), l1: '', l2: '', consume: [] })
+assert.equal(rp.status, 400)
+assert.equal(rp.payload.code, 'l0-too-long')
+assert.equal(sha256OfCurrentPersona(), shaBefore, '被拒时一个字节都不许动')
+console.log('46. 越界保存被拒且文件不变')
+
+/* 47. consume 带不存在的 id：整单拒绝 */
+rp = await call('POST', '/api/selfnote/persona', { l0: '甲', l1: '', l2: '', consume: ['no-such-id'] })
+assert.equal(rp.status, 400)
+assert.equal(rp.payload.code, 'validation')
+assert.equal(sha256OfCurrentPersona(), shaBefore)
+console.log('47. 非法证据 id 整单拒绝')
+
+/* 48. 成功保存 → 证据变 used，并记 consumedBy */
+corrections.writeEvents([])
+corrections.appendEvents([{ id: 'ev-ok', session: 's', idx: 1, quote: '我说过先举例', at: new Date().toISOString() }])
+rp = await call('POST', '/api/selfnote/persona', { l0: '我是大肥鱼。', l1: '先举例再给结论。', l2: '', consume: ['ev-ok'] })
+assert.equal(rp.status, 200)
+assert.deepEqual(rp.payload.consumed, ['ev-ok'])
+const usedEvent = corrections.findById('ev-ok')
+assert.equal(usedEvent.used, true)
+assert.ok(usedEvent.usedAt !== '')
+assert.ok(usedEvent.consumedBy !== null)
+console.log('48. 保存成功同时消费证据')
+
+/* 49. GET /corrections：分页字段齐全，且明说没有写权限 */
+const listed = await call('GET', '/api/selfnote/corrections')
+assert.equal(listed.status, 200)
+assert.ok(Array.isArray(listed.payload.items))
+assert.equal(typeof listed.payload.total, 'number')
+assert.ok('nextCursor' in listed.payload)
+assert.match(listed.payload.hint, /没有写入权限/)
+console.log('49. GET /corrections 只读且带提示')
+
+/* 50. discard：合法 id 变 used；非法 id 400 */
+corrections.appendEvents([{ id: 'ev-drop', session: 's', idx: 2, quote: '别再用表格', at: new Date().toISOString() }])
+let rd = await call('POST', '/api/selfnote/corrections/discard', { ids: ['ev-drop'] })
+assert.equal(rd.status, 200)
+assert.equal(corrections.findById('ev-drop').used, true)
+rd = await call('POST', '/api/selfnote/corrections/discard', { ids: ['nope'] })
+assert.equal(rd.status, 400)
+console.log('50. discard 丢弃证据，非法 id 被拒')
+
+/* 51. 导入：只返回三段，不落盘 */
+const shaBeforeImport = sha256OfCurrentPersona()
+const importedPersona = await call('POST', '/api/selfnote/persona/import')
+assert.equal(importedPersona.status, 200)
+assert.ok('l0' in importedPersona.payload && 'l1' in importedPersona.payload && 'l2' in importedPersona.payload)
+assert.equal(sha256OfCurrentPersona(), shaBeforeImport, '导入不等于采纳：不许自动保存')
+console.log('51. 从 AGENT.md 导入只填空，不保存')
+
+/* 52. state 与体检：人格/纠偏各一段，体检八项 */
+st = (await call('GET', '/api/selfnote/state')).payload
+assert.equal(st.persona.l0Limit, 80)
+assert.equal(st.persona.fileLimit, 8000)
+assert.equal(typeof st.persona.l1Limit, 'number')
+assert.equal(typeof st.corrections.total, 'number')
+const doctorDoc = (await call('GET', '/api/selfnote/doctor')).payload
+const keys = doctorDoc.checks.map((check) => check.key)
+// 八项固定 + 「解不开的会话」按需追加 —— 固定项一个不许少，也不许悄悄长出去
+const BASE = ['index', 'capture', 'facts', 'notes', 'auth', 'persona', 'corrections', 'beat']
+for (const key of BASE) assert.ok(keys.includes(key), '体检少了 ' + key + '：' + keys.join(','))
+assert.ok(keys.length === BASE.length || keys.length === BASE.length + 1, '体检项数不对：' + keys.join(','))
+if (keys.length === BASE.length + 1) assert.ok(keys.includes('index-failed'), '多出来的只能是 index-failed')
+assert.equal(keys[keys.length - 1], 'beat', '心跳永远排最后')
+console.log('52. state 带人格与纠偏，体检八项')
+
+console.log('\n52 项全部通过（data dir: ' + dir + '）')
 process.exit(0)
