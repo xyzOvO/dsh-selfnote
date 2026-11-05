@@ -87,6 +87,7 @@ const shot = (rows) => {
 }
 
 // 核心两条（旧的在前）、稳定一 pin 一新一旧、临时一条
+// 核心已经降级成「身份素材」：留在文件里，但不参与注入。
 const ordered = shot([
   { date: '2026-11-01', text: 'CORE1' + pad(10), tier: 'core', pin: false },
   { date: '2026-11-02', text: 'CORE2' + pad(10), tier: 'core', pin: false },
@@ -96,40 +97,38 @@ const ordered = shot([
   { date: '2026-11-06', text: 'TEMP1' + pad(10), tier: 'temp', pin: false },
 ])
 const at = (marker) => ordered.indexOf(marker)
-assert.ok(at('CORE1') >= 0 && at('TEMP1') >= 0, '六条都该进得来：' + JSON.stringify(ordered))
-assert.ok(at('CORE1') < at('CORE2'), '核心按原顺序（老的人格底子先保住）')
-assert.ok(at('CORE2') < at('STABLE-PIN'), '核心整体排在稳定前面')
+assert.ok(!ordered.includes('CORE1') && !ordered.includes('CORE2'), '核心不再进注入：' + JSON.stringify(ordered))
+assert.ok(at('STABLE-PIN') >= 0 && at('TEMP1') >= 0, '稳定与临时照旧进得来：' + JSON.stringify(ordered))
 assert.ok(at('STABLE-PIN') < at('STABLE-NEW'), '稳定的 pin 要先于普通条目')
 assert.ok(at('STABLE-NEW') < at('STABLE-OLD'), '稳定里同优先级按时间倒序')
 assert.ok(at('STABLE-OLD') < at('TEMP1'), '临时排最后')
-console.log('3. 注入顺序：核心 → 稳定（★ 先）→ 临时')
+console.log('3. 注入顺序：稳定（★ 先）→ 临时，核心不进')
 
-/* ---------------- 3b. 核心段也认 pin ---------------- */
+/* ---------------- 3b. 核心留在文件里，只当素材 ---------------- */
 
-// 三条核心，钉住的是**最后写入**的那条。按「老→新」它排最后、会被 120 字上限挡掉；
-// 只有 pin 真的生效，它才会插到最前面进场。
+// 三条核心、其中一条钉住：钉不钉都不进注入，但文件里一条不少、类型没被改
 const corePin = shot([
   { date: '2026-11-01', text: 'CP-OLD' + pad(45), tier: 'core', pin: false },
   { date: '2026-11-02', text: 'CP-NEW' + pad(45), tier: 'core', pin: false },
   { date: '2026-11-03', text: 'CP-PIN' + pad(45), tier: 'core', pin: true },
 ])
-assert.ok(corePin.includes('CP-PIN'), '钉住的核心必须进场（它在文件里排最后）：' + JSON.stringify(corePin))
-assert.ok(corePin.includes('CP-OLD'), '没钉的按老→新，老的先保住')
-assert.ok(!corePin.includes('CP-NEW'), '装不下时该挤掉的是中间那条（老的先保住、钉住的最先）')
-assert.ok(corePin.indexOf('CP-PIN') < corePin.indexOf('CP-OLD'), 'pin 的核心排在普通核心前面')
-console.log('3b. 核心段也认 pin（钉住的先占位，其余仍按老→新）')
+assert.ok(!corePin.includes('CP-PIN') && !corePin.includes('CP-OLD'), '钉住的核心也不进注入：' + JSON.stringify(corePin))
+assert.equal(store.readNotes().filter((entry) => entry.tier === 'core').length, 3, '存量核心不许被删')
+assert.ok(store.readNotes().some((entry) => entry.tier === 'core' && entry.pin === true), 'pin 标记还在')
+assert.match(corePin, /另有 3 条身份素材（不注入，self_note read 可看）/, '要告诉模型「有素材但没给你」：' + JSON.stringify(corePin))
+console.log('3b. 核心降级为素材：不进注入、不删、留门牌')
 
-/* ---------------- 4. 核心最多 60%，装不下的有门牌 ---------------- */
+/* ---------------- 4. 核心再多也占不到稳定的位 ---------------- */
 
-// 3 条 50 字的核心：120 字上限只装得下两条
+// 6 条 50 字的核心：以前 120 字上限只装得下两条，现在一条都不装，稳定的位一点不动
 const coreHeavy = shot([
-  ...Array.from({ length: 3 }, (_, i) => ({ date: '2026-11-0' + (i + 1), text: 'CORE' + i + pad(45), tier: 'core', pin: false })),
+  ...Array.from({ length: 6 }, (_, i) => ({ date: '2026-11-0' + (i + 1), text: 'CORE' + i + pad(45), tier: 'core', pin: false })),
+  { date: '2026-11-20', text: 'STABLE-KEEP' + pad(10), tier: 'stable', pin: false },
 ])
-assert.ok(coreHeavy.includes('CORE0'), '第一条核心在')
-assert.ok(coreHeavy.includes('CORE1'), '第二条核心在')
-assert.ok(!coreHeavy.includes('CORE2'), '第三条核心该被 60% 上限挡住')
-assert.ok(coreHeavy.includes('另有 1 条自述（self_note read）'), '被挤掉的必须有门牌：' + JSON.stringify(coreHeavy))
-console.log('4. 核心 60% 上限生效，装不下的留门牌')
+assert.ok(!coreHeavy.includes('CORE0'), '核心一条都不该进：' + JSON.stringify(coreHeavy))
+assert.ok(coreHeavy.includes('STABLE-KEEP'), '稳定的位不许被核心占走')
+assert.match(coreHeavy, /另有 6 条身份素材（不注入，self_note read 可看）/, '六条都要在门牌里数清')
+console.log('4. 核心不占注入预算，稳定的位一点不动')
 
 /* ---------------- 5. 临时有保底，不会被稳定全部挤掉 ---------------- */
 
@@ -143,7 +142,7 @@ console.log('5. 临时段拿到保底份额')
 
 /* ---------------- 6. 全部装得下时不出门牌 ---------------- */
 
-const roomy = shot([{ date: '2026-11-04', text: '只有一条' + pad(5), tier: 'core', pin: false }])
+const roomy = shot([{ date: '2026-11-04', text: '只有一条' + pad(5), tier: 'stable', pin: false }])
 assert.ok(!roomy.includes('另有'), '没有条目被挤掉就不该有门牌：' + JSON.stringify(roomy))
 console.log('6. 没东西被挤掉时不出门牌')
 
@@ -161,7 +160,8 @@ const ttlShot = shot([
   { date: ago(20), text: 'TEMP-EXPIRED' + pad(5), tier: 'temp', pin: false },
   { date: ago(1), text: 'TEMP-FRESH' + pad(5), tier: 'temp', pin: false },
 ])
-assert.ok(ttlShot.includes('CORE-OLD'), '核心永不过期（人格不能因为时间掉出去）')
+assert.ok(!ttlShot.includes('CORE-OLD'), '核心不进注入（它是素材，条数靠门牌说）：' + JSON.stringify(ttlShot))
+assert.ok(ttlShot.includes('另有 1 条身份素材'), '核心不进场也要有门牌，否则模型以为没有素材')
 assert.ok(ttlShot.includes('STABLE-OLD'), '稳定型也不过期（pin 的偏好更不该掉）')
 assert.ok(ttlShot.includes('TEMP-FRESH'), '没过期的临时自述照常进场')
 assert.ok(!ttlShot.includes('TEMP-EXPIRED'), '过了 14 天的临时自述不再自动进场：' + JSON.stringify(ttlShot))
@@ -190,8 +190,8 @@ console.log('8. 保质期可配（1–90 天），核心与稳定永不到期')
 
 /* ---------------- 9. 写入告警说的是「这轮真能用的字数」 ---------------- */
 
-// 核心先占掉 120 字（两条 58 字），稳定再吃掉一份 —— 临时段实际只剩几十字。
-// 一条 110 字的临时自述：按「整段 200 字」比是过关的，实际每回合都被跳过。
+// 稳定先吃掉 160 字，临时段只保底 50 字 —— 一条 110 字的临时自述按「整段 200 字」比是过关的，
+// 实际每回合都被跳过。
 const writeWarn = async (tier, text) => {
   const captured = { tools: [] }
   apply(
@@ -212,11 +212,8 @@ store.writeNotes([])
 writeFileSync(
   store.notesPath(),
   [
-    ...['CORE0', 'CORE1'].map((tag, i) =>
-      store.renderNotes([{ date: '2026-11-0' + (i + 1), text: tag + pad(52), tier: 'core', pin: false }]),
-    ),
-    ...['ST0', 'ST1'].map((tag, i) =>
-      store.renderNotes([{ date: '2026-11-0' + (i + 5), text: tag + pad(32), tier: 'stable', pin: false }]),
+    ...['ST0', 'ST1', 'ST2', 'ST3'].map((tag, i) =>
+      store.renderNotes([{ date: '2026-11-0' + (i + 1), text: tag + pad(37), tier: 'stable', pin: false }]),
     ),
   ].join('\n') + '\n',
 )
