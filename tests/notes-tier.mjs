@@ -115,7 +115,7 @@ const corePin = shot([
 assert.ok(!corePin.includes('CP-PIN') && !corePin.includes('CP-OLD'), '钉住的核心也不进注入：' + JSON.stringify(corePin))
 assert.equal(store.readNotes().filter((entry) => entry.tier === 'core').length, 3, '存量核心不许被删')
 assert.ok(store.readNotes().some((entry) => entry.tier === 'core' && entry.pin === true), 'pin 标记还在')
-assert.match(corePin, /另有 3 条身份素材（不注入，self_note read 可看）/, '要告诉模型「有素材但没给你」：' + JSON.stringify(corePin))
+assert.match(corePin, /另有 3 条身份素材没装进来（self_note read 可看）/, '要告诉模型「有素材但没给你」：' + JSON.stringify(corePin))
 console.log('3b. 核心降级为素材：不进注入、不删、留门牌')
 
 /* ---------------- 4. 核心再多也占不到稳定的位 ---------------- */
@@ -127,7 +127,7 @@ const coreHeavy = shot([
 ])
 assert.ok(!coreHeavy.includes('CORE0'), '核心一条都不该进：' + JSON.stringify(coreHeavy))
 assert.ok(coreHeavy.includes('STABLE-KEEP'), '稳定的位不许被核心占走')
-assert.match(coreHeavy, /另有 6 条身份素材（不注入，self_note read 可看）/, '六条都要在门牌里数清')
+assert.match(coreHeavy, /另有 6 条身份素材没装进来（self_note read 可看）/, '六条都要在门牌里数清')
 console.log('4. 核心不占注入预算，稳定的位一点不动')
 
 /* ---------------- 5. 临时有保底，不会被稳定全部挤掉 ---------------- */
