@@ -886,6 +886,25 @@ console.log('52. state 带人格与纠偏，体检八项')
   console.log('53. 人格迁移：空则采用、同则跳过、异则落旁路文件，本机那份不被盖')
 }
 
-console.log('\n53 项全部通过（data dir: ' + dir + '）')
+/* 54. 开机补完：上次保存崩在中途，重启时按日志补齐 */
+{
+  const tx = await import('../lib/persona-tx.js')
+  const { personaPath } = await import('../lib/persona.js')
+  // 造一个「persona 已写、证据还没记账、日志还没删」的中断现场
+  tx.beginTx({
+    txId: 'tx-boot-recover',
+    at: new Date().toISOString(),
+    personaSha256: tx.sha256OfCurrentPersona(),
+    consume: [],
+    evidenceAfter: { v: 1, algo: 'nfkc-wp1', rules: {} },
+  })
+  assert.equal(existsSync(join(dir, 'persona.pending.json')), true, '中断现场没造出来')
+  apply(ctx, {}) // 相当于重启插件
+  assert.equal(existsSync(join(dir, 'persona.pending.json')), false, '开机时应该把半截事务补完，而不是留着等人来救')
+  assert.ok(existsSync(personaPath()), 'persona.md 该在')
+  console.log('54. 开机补完半截事务：重启即幂等重放，日志清掉，人格文件不动')
+}
+
+console.log('\n54 项全部通过（data dir: ' + dir + '）')
 
 process.exit(0)
