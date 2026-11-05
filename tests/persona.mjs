@@ -192,5 +192,19 @@ assert.equal(TOTAL_BUDGET, 1000)
 
 console.log('18-20 人格进注入通过')
 
+// 21. 字符口径统一：段落字数按码点算，加起来加固定开销必须正好等于总数
+savePersonaFile({ l0: '我是大肥鱼🐟。', l1: '- 先给结论。', l2: '' })
+{
+  const inj = (await stateOfNow()).injection
+  assert.equal(inj.chars, countChars(inj.text), '总数要按码点算，不是 UTF-16 长度')
+  const sum = inj.segments.reduce((acc, seg) => acc + seg.chars, 0)
+  assert.equal(sum + inj.overhead, inj.chars, '各段字数 + 固定开销必须正好等于总数')
+  // 🐟 是单个码点、两个 UTF-16 单元：按码点算和按「人看到的字」算在这里是一致的
+  assert.equal(countChars('🐟'), 1)
+  assert.equal('🐟'.length, 2)
+  assert.ok(inj.segments[0].chars < countChars(inj.text) - 1, '人格段不该把整段都算成自己的')
+  console.log('21. 字符口径统一：按码点算，各段 + 固定开销 = 总数')
+}
+
 rmSync(dir, { recursive: true, force: true })
-console.log('\n20 项全部通过')
+console.log('\n21 项全部通过')
