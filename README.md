@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/version-0.14.0-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
-  <img src="https://img.shields.io/badge/tests-281%20passed-0ea5e9" alt="tests">
+  <img src="https://img.shields.io/badge/tests-282%20passed-0ea5e9" alt="tests">
 </p>
 
 ---
@@ -528,7 +528,7 @@ L2 为空时那句指路句也不发（不能指一条空路）。L2 有内容�
 ## 开发
 
 ```bash
-node --run test              # 281 项，21 个文件，无外部依赖
+node --run test              # 282 项，21 个文件，无外部依赖
 node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 ```
 

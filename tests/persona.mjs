@@ -48,21 +48,42 @@ assert.equal(countChars('e\u0301'), 2)
 console.log('1-4 + countChars 通过')
 
 // ---- 容量校验、读取与原子保存 ----
-const { validatePersona, savePersonaFile, readPersona, personaPath, PersonaValidationError } = await import('../lib/persona.js')
+const { validatePersona, savePersonaFile, readPersona, personaPath, PersonaValidationError, costOfLines } = await import('../lib/persona.js')
+const { personaSegment } = await import('../lib/index.js')
 
 savePersonaFile({ l0: '甲'.repeat(72), l1: '乙'.repeat(202), l2: '' })
 const before = readFileSync(personaPath(), 'utf8')
 
-// 13b. L0 72 + L1 249 = 321 → 拒绝，文件一个字节都不变
+// 13b. L0 72 + L1 249 + 1 个分隔换行 = 322 → 拒绝，文件一个字节都不变
 assert.throws(
   () => savePersonaFile({ l0: '甲'.repeat(72), l1: '乙'.repeat(249), l2: '' }),
-  (error) => error instanceof PersonaValidationError && error.code === 'total-too-long' && /超了 1 字/.test(error.message),
+  (error) => error instanceof PersonaValidationError && error.code === 'total-too-long' && /超了 2 字/.test(error.message),
 )
 assert.equal(readFileSync(personaPath(), 'utf8'), before)
 
-// 13. 借额度：60 + 260 = 320 合法，261 不合法
-assert.equal(validatePersona({ l0: '甲'.repeat(60), l1: '乙'.repeat(260), l2: '' }).ok, true)
-assert.equal(validatePersona({ l0: '甲'.repeat(60), l1: '乙'.repeat(261), l2: '' }).code, 'total-too-long')
+// 13a. 反例：L0 80 + L1 240，正文合计正好 320，但注入时还要一个分隔换行 = 321。
+// 校验必须在这里就拒 —— 放过它就等于让人「保存成功」，然后每回合被悄悄切掉两个字。
+assert.equal(
+  validatePersona({ l0: '甲'.repeat(80), l1: '乙'.repeat(240), l2: '' }).code,
+  'total-too-long',
+  '校验的尺子要含行间换行，与注入同一把',
+)
+assert.equal(validatePersona({ l0: '甲'.repeat(80), l1: '乙'.repeat(239), l2: '' }).ok, true, '239 才是真的 320')
+
+// 13. 借额度：60 + 259 + 1 个分隔 = 320 合法，260 就超了（尺子含换行，与注入一致）
+assert.equal(validatePersona({ l0: '甲'.repeat(60), l1: '乙'.repeat(259), l2: '' }).ok, true)
+assert.equal(validatePersona({ l0: '甲'.repeat(60), l1: '乙'.repeat(260), l2: '' }).code, 'total-too-long')
+// 保存合法的「正好 320」人格，注入时不许再把它切掉 —— 两把尺子必须是同一把
+{
+  const tight = { l0: '甲'.repeat(60), l1: '乙'.repeat(259) }
+  savePersonaFile({ ...tight, l2: '' })
+  const seg = personaSegment(readPersona(), 320)
+  assert.equal(seg.truncated, false, '保存说 320 正好，注入时就不许截断')
+  assert.equal(seg.skipped.length, 0, '一行都不许丢')
+  assert.equal(seg.chars, 320, '段字数要正好等于校验时算的 320：' + seg.chars)
+  // 把文件恢复成后面用例要读的样子
+  savePersonaFile({ l0: '甲'.repeat(72), l1: '乙'.repeat(202), l2: '' })
+}
 
 // L0 上限与 emoji（按码点算：80 合法，81 不合法）
 assert.equal(validatePersona({ l0: '甲'.repeat(80), l1: '', l2: '' }).ok, true)
@@ -147,7 +168,12 @@ assert.ok(!t.includes('深色长发'))
 
 // 10/11. L2 非空 → 有指路句；且不进 chars
 assert.ok(t.includes('self_note action:"persona"'))
-assert.equal((await personaOf()).chars, countChars('我是大肥鱼。') + countChars('- 先给结论。\n- 不客套。'))
+{
+  // 段字数 = 真正进场那段文字的字数（换行也算）：界面上的 21 / 320 才对得上肉眼
+  const seg = await personaOf()
+  assert.ok((await textOf()).includes(seg.kept.join(String.fromCharCode(10))), '进场的就是 kept 拼起来的那几行')
+  assert.equal(seg.chars, costOfLines(seg.kept), 'kept 各行的字 + 行间换行')
+}
 
 // 10b. L2 为空 → 没有指路句
 savePersonaFile({ l0: '我是大肥鱼。', l1: '- 先给结论。', l2: '' })
@@ -157,6 +183,11 @@ assert.ok(!(await textOf()).includes('self_note action:"persona"'))
 writeRawPersona('', Array.from({ length: 20 }, (_, i) => `- 第${i + 1}条规则` + '。'.repeat(20)).join('\n'))
 const crowded = await personaOf()
 assert.ok(crowded.skipped.length > 0)
+  // 门牌里的数字必须等于真跳过数：印一个自己编的数字比不印更糟
+  assert.ok(
+    (await textOf()).includes(`另有 ${crowded.skipped.length} 行人格规则没装进来`),
+    '门牌数字要对得上实际跳过数：' + (await textOf()),
+  )
 assert.match(await textOf(), /另有 \d+ 行人格规则没装进来/)
 
 // 9. 单行就超预算 → 截断 + …，且留痕（半句规则强过没有人格）
@@ -169,6 +200,16 @@ assert.ok(huge.kept[0].endsWith('…'))
 writeRawPersona('', Array.from({ length: 40 }, () => '规'.repeat(10)).join('\n'))
 const clamped = await personaOf()
 assert.ok(clamped.chars <= 320 && clamped.chars > 200)
+
+// 17b. L0 多行、L1 空：三段账也要闭合（l1 必须是 0，不是负数或漏算的差额）
+writeRawPersona(['第一行','第二行','第三行'].join(String.fromCharCode(10)), '')
+{
+  const seg = await personaOf()
+  assert.equal(seg.l1.chars, 0, 'L1 空的时候不许蹭出字数')
+  assert.equal(seg.l1.kept, 0)
+  assert.equal(seg.chars, costOfLines(['第一行', '第二行', '第三行']), 'L0 内部换行也要算进段字数')
+  assert.equal(seg.chars, seg.l0.chars + seg.l1.chars, '三段账要闭合')
+}
 
 // 18. L0 被外部改成 200 字 → 截到 80 并留痕
 writeRawPersona('身'.repeat(200), '')

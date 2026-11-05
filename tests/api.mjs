@@ -290,7 +290,7 @@ console.log('18. 超长条目不再把整段挤空')
 r = await call('GET', '/api/selfnote/state')
 const files = r.payload.files
 assert.equal(Array.isArray(files), true)
-assert.deepEqual(files.map((item) => item.key), ['notes', 'facts', 'habits', 'config', 'cursor', 'index', 'archive'])
+assert.deepEqual(files.map((item) => item.key), ['persona', 'notes', 'facts', 'habits', 'config', 'cursor', 'index', 'archive'], '人格文件也要能在这里看见、点开')
 for (const item of files) {
   assert.equal(typeof item.label, 'string')
   assert.equal(typeof item.path, 'string')
@@ -841,6 +841,7 @@ assert.equal(st.persona.l0Limit, 80)
 assert.equal(st.persona.fileLimit, 8000)
 assert.equal(typeof st.persona.l1Limit, 'number')
 assert.equal(typeof st.corrections.total, 'number')
+assert.equal(Array.isArray(st.corrections.items), true, '界面靠 items 渲染勾选区，只给计数等于让这条链路死掉')
 const doctorDoc = (await call('GET', '/api/selfnote/doctor')).payload
 const keys = doctorDoc.checks.map((check) => check.key)
 // 八项固定 + 「解不开的会话」按需追加 —— 固定项一个不许少，也不许悄悄长出去

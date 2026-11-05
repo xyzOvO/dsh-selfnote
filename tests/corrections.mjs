@@ -138,7 +138,7 @@ console.log('54. 三文件一致：写不下去报 pending，恢复后计数正�
 
 /* ---------------- 55. 串行化：外部持锁 → locked；并发提交各自成功 ---------------- */
 
-writeFileSync(lockPath, 'other-process')
+writeFileSync(lockPath, String(process.pid)) // 一个**活着的**进程持锁（写 gcd 之外的 pid 会被当陈旧锁清掉）
 const locked = await tx.commitPersona({ l0: '我是大肥鱼。', l1: '- 先说结论。', l2: '', consume: [] })
 assert.equal(locked.ok, false)
 assert.equal(locked.code, 'locked', '有人正在保存，就该说 locked，不是排队等死：' + JSON.stringify(locked))
@@ -150,7 +150,38 @@ const [one, two] = await Promise.all([
 assert.equal(one.ok && two.ok, true, '进程内两次提交要串行跑完，都成功：' + JSON.stringify([one, two]))
 assert.equal(tx.readTx(), null, '跑完不能留日志')
 assert.equal(existsSync(lockPath), false, '跑完要放锁')
-console.log('55. 串行化：外部持锁报 locked，并发提交串行完成')
+
+// 陈旧锁：上次被强杀留下的锁（pid 早没了）必须能自愈，否则「保存人格」永久 409
+writeFileSync(lockPath, '999999')
+const dead = await tx.commitPersona({ l0: '我是大肥鱼。', l1: '- 先说结论。', l2: '', consume: [] })
+assert.equal(dead.ok, true, '死进程留下的锁要自己清掉，不能让人手动删文件：' + JSON.stringify(dead))
+assert.equal(existsSync(lockPath), false, '自愈之后锁也要放掉')
+console.log('55. 串行化：外部持锁报 locked，陈旧锁自愈，并发提交串行完成')
+
+/* ---------------- 54b. 没重启又点一次保存：上一次的事务不许被覆盖掉 ---------------- */
+
+{
+  // 先造一次「persona 写了、证据记账没写成」的半截事务（和 54 同一个手法）
+  store.appendEvents([
+    { id: store.eventId('s-e', 1, '我说过别写客套话'), at: new Date().toISOString(), session: 's-e', idx: 1, quote: '我说过别写客套话', signal: '我说过', strength: 'strong' },
+  ])
+  const ev = store.readEvents().find((entry) => entry.quote === '我说过别写客套话')
+  rmSync(evidencePath, { force: true })
+  mkdirSync(evidencePath, { recursive: true })
+  const stuck = await tx.commitPersona({ l0: '我是大肥鱼。', l1: '- 半截规则。', l2: '', consume: [ev.id] })
+  assert.equal(stuck.pending, true, '先把证据记账弄坏：' + JSON.stringify(stuck))
+  rmSync(evidencePath, { recursive: true, force: true })
+
+  // 用户没重启，直接又点了一次保存 —— 这次必须先把上一次结清，不能把它的 evidenceAfter 盖掉
+  const second = await tx.commitPersona({ l0: '我是大肥鱼。', l1: '- 第二次的规则。', l2: '', consume: [] })
+  assert.equal(second.ok, true, '第二次保存要成功：' + JSON.stringify(second))
+  const rules = tx.readEvidence().rules
+  assert.equal(rules[tx.ruleFingerprint('- 半截规则。')]?.count, 1, '上一次那条规则的计数不能凭空蒸发')
+  assert.equal(rules[tx.ruleFingerprint('- 第二次的规则。')]?.count, 1)
+  assert.equal(store.findById(ev.id).consumedBy !== null, true, '上一次消费的那条证据要落定')
+  assert.equal(tx.readTx(), null, '结清之后不许留日志')
+  console.log('54b. 没重启又点保存：上一次的事务先结清，计数不蒸发')
+}
 
 /* ---------------- 56. 非法 id 整单拒绝，文件一个字节都不动 ---------------- */
 
@@ -165,6 +196,30 @@ assert.equal(badUsed.code, 'validation')
 assert.equal(persona.readPersona().l0, beforePersona.l0, '校验失败时 persona 一个字都不许动')
 assert.deepEqual(tx.readEvidence(), beforeEvidence, '校验失败时证据也不许动')
 console.log('56. 非法 id：整单拒绝，三个文件都不动')
+
+/* ---------------- 56b. 用户亲手丢弃的证据，不许再被拿去写规则 ---------------- */
+
+{
+  const kept = store.appendEvents([
+    { id: store.eventId('s-d', 1, '我说过要先给结论'), at: new Date().toISOString(), session: 's-d', idx: 1, quote: '我说过要先给结论', signal: '我说过', strength: 'strong' },
+  ])
+  assert.equal(kept, 1)
+  const target = store.readEvents().find((entry) => entry.quote === '我说过要先给结论')
+  const dropped = store.discardByIds([target.id])
+  assert.equal(dropped.ok, true, '丢弃要成功：' + JSON.stringify(dropped))
+  const afterDrop = store.findById(target.id)
+  assert.equal(afterDrop.used, true)
+  assert.equal(afterDrop.consumedBy, null, '丢弃不是消费：consumedBy 留空')
+
+  const personaBefore = persona.readPersona().l1
+  const verdict = await tx.commitPersona({ l0: '我是大肥鱼。', l1: '- 又说了一句。', l2: '', consume: [target.id] })
+  assert.equal(verdict.ok, false, '丢弃过的证据不能再当依据')
+  assert.equal(verdict.code, 'validation')
+  assert.match(verdict.error, /已被丢弃/)
+  assert.equal(persona.readPersona().l1, personaBefore, '拒绝时人格不许动')
+  assert.equal(store.findById(target.id).consumedBy, null, '拒绝时证据也不许被改写成「已消费」')
+  console.log('56b. 丢弃过的证据：不能再被消费，账面上看得出来')
+}
 
 /* ---------------- 57. 超长校验同样整单拒绝 ---------------- */
 
@@ -211,6 +266,12 @@ store.appendEvents([{ id: 'late', session: 's9', idx: 0, quote: '别再用表格
 const page2 = store.listCorrections({ cursor: page1.nextCursor, limit: 30 })
 assert.equal(page2.items.filter((item) => seen.has(item.id)).length, 0, '第二页不许重复第一页')
 assert.equal(store.listCorrections({ cursor: page2.nextCursor, limit: 500 }).nextCursor, null, '末页 nextCursor 必须是 null')
+// 游标解不开时当作「从头开始」，而不是拿半截字符串去比对
+{
+  const garbage = store.listCorrections({ cursor: 'bm90LWEtY3Vyc29y', limit: 3 })
+  const fresh = store.listCorrections({ limit: 3 })
+  assert.deepEqual(garbage.items.map((item) => item.id), fresh.items.map((item) => item.id), '垃圾游标要从头开始')
+}
 console.log('60. 分页：稳定游标，翻页不重不漏')
 
 // 61. 200 条上限：丢最旧（按 at），不是丢最新
