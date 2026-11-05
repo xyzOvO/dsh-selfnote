@@ -109,7 +109,36 @@ utimesSync(oldFile, longAgo, longAgo)
 const stale = store.freshness(index)
 assert.equal(stale.fresh, false, '多了个冷会话，索引就代表不了磁盘')
 assert.equal(stale.missing, 1)
+assert.equal(stale.absent, 1, '这个会话根本没进过索引')
+assert.equal(stale.stale, 0, '不是「进去过又改了」，是「没进去」')
 console.log('7b. 冷会话新增后索引被判过期（missing=1）')
+
+/* 7c. 「没进去」和「进去过又改了」要分开报：两个数合成一个，就会跟页面上
+   那组「已索引 / 磁盘」对不上 —— 看着像算错了，其实是在说两件事 */
+const dirChanged = join(process.env.DSH_SESSIONS_DIR, 'proj', 'session-changed')
+mkdirSync(dirChanged, { recursive: true })
+const changedFile = join(dirChanged, 'session.v4.jsonl.zstd')
+writeFileSync(changedFile, zstdCompressSync(Buffer.from(JSON.stringify(userMessage(1, 1700000000000, '一开始的内容。')) + '\n', 'utf8')))
+const changedOld = new Date(Date.now() - 40 * 60 * 1000)
+utimesSync(changedFile, changedOld, changedOld)
+// 先把磁盘上现有的（含 session-old、session-changed）全收进索引
+const beforeChange = store.buildIndex()
+// 再让 session-changed 变成「建完之后又改过」（冷下来，靠 mtime 变新来暴露）
+const changedLater = new Date(Date.now() - 20 * 60 * 1000)
+utimesSync(changedFile, changedLater, changedLater)
+// 再加一个从来没进过索引的冷会话
+const dirFresh = join(process.env.DSH_SESSIONS_DIR, 'proj', 'session-fresh')
+mkdirSync(dirFresh, { recursive: true })
+const freshFile = join(dirFresh, 'session.v4.jsonl.zstd')
+writeFileSync(freshFile, zstdCompressSync(Buffer.from(JSON.stringify(userMessage(1, 1700000000000, '索引建完之后才出现的会话。')) + '\n', 'utf8')))
+const freshOld = new Date(Date.now() - 30 * 60 * 1000)
+utimesSync(freshFile, freshOld, freshOld)
+const mixed = store.freshness(beforeChange)
+assert.equal(mixed.missing, 2, '一个没进去、一个又改过，合起来还是 2 个待同步')
+assert.equal(mixed.absent, 1, 'absent 只数没进去的那个')
+assert.equal(mixed.stale, 1, 'stale 只数建完之后又改过的那个')
+assert.equal(mixed.absent + mixed.stale, mixed.missing, '分项加起来必须等于总数，不许漏')
+console.log('7c. 待同步拆得开：「没进去 1 个、又改过 1 个」合计 2')
 
 /* 8. stats 反映磁盘实况 */
 const stats = store.indexStats()
@@ -181,5 +210,5 @@ console.log('11. 多 frame zstd 能整块解出来（' + multi.records.length + 
 }
 console.log('12. 索引只落后几个会话时就地补上，落后太多就退回线性扫描')
 
-console.log('\n13 项全部通过')
+console.log('\n14 项全部通过')
 process.exit(0)

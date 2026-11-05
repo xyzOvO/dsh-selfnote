@@ -104,6 +104,21 @@ assert.ok(at('STABLE-NEW') < at('STABLE-OLD'), '稳定里同优先级按时间�
 assert.ok(at('STABLE-OLD') < at('TEMP1'), '临时排最后')
 console.log('3. 注入顺序：核心 → 稳定（★ 先）→ 临时')
 
+/* ---------------- 3b. 核心段也认 pin ---------------- */
+
+// 三条核心，钉住的是**最后写入**的那条。按「老→新」它排最后、会被 120 字上限挡掉；
+// 只有 pin 真的生效，它才会插到最前面进场。
+const corePin = shot([
+  { date: '2026-11-01', text: 'CP-OLD' + pad(45), tier: 'core', pin: false },
+  { date: '2026-11-02', text: 'CP-NEW' + pad(45), tier: 'core', pin: false },
+  { date: '2026-11-03', text: 'CP-PIN' + pad(45), tier: 'core', pin: true },
+])
+assert.ok(corePin.includes('CP-PIN'), '钉住的核心必须进场（它在文件里排最后）：' + JSON.stringify(corePin))
+assert.ok(corePin.includes('CP-OLD'), '没钉的按老→新，老的先保住')
+assert.ok(!corePin.includes('CP-NEW'), '装不下时该挤掉的是中间那条（老的先保住、钉住的最先）')
+assert.ok(corePin.indexOf('CP-PIN') < corePin.indexOf('CP-OLD'), 'pin 的核心排在普通核心前面')
+console.log('3b. 核心段也认 pin（钉住的先占位，其余仍按老→新）')
+
 /* ---------------- 4. 核心最多 60%，装不下的有门牌 ---------------- */
 
 // 3 条 50 字的核心：120 字上限只装得下两条
@@ -173,5 +188,47 @@ const looseShot = (() => {
 assert.ok(looseShot.includes('TEMP-REVIVED'), '保质期调到 30 天，20 天前的那条该回来')
 console.log('8. 保质期可配（1–90 天），核心与稳定永不到期')
 
-console.log('\n8 项全部通过')
+/* ---------------- 9. 写入告警说的是「这轮真能用的字数」 ---------------- */
+
+// 核心先占掉 120 字（两条 58 字），稳定再吃掉一份 —— 临时段实际只剩几十字。
+// 一条 110 字的临时自述：按「整段 200 字」比是过关的，实际每回合都被跳过。
+const writeWarn = async (tier, text) => {
+  const captured = { tools: [] }
+  apply(
+    {
+      logger: { info: () => {} },
+      on: () => () => {},
+      systemPrompt: { context: () => () => {} },
+      tools: { register: (def) => (captured.tools.push(def), () => {}) },
+      webServer: { register: () => () => {} },
+      agents: { currentInitiator: () => ({ session: { header: { id: 'tier' } } }) },
+    },
+    { enabled: true, profileEnabled: false },
+  )
+  return captured.tools[0].execute({ action: 'write', text, tier })
+}
+
+store.writeNotes([])
+writeFileSync(
+  store.notesPath(),
+  [
+    ...['CORE0', 'CORE1'].map((tag, i) =>
+      store.renderNotes([{ date: '2026-11-0' + (i + 1), text: tag + pad(52), tier: 'core', pin: false }]),
+    ),
+    ...['ST0', 'ST1'].map((tag, i) =>
+      store.renderNotes([{ date: '2026-11-0' + (i + 5), text: tag + pad(32), tier: 'stable', pin: false }]),
+    ),
+  ].join('\n') + '\n',
+)
+
+const tooLongForTemp = await writeWarn('temp', 'T'.repeat(110))
+assert.ok(tooLongForTemp.warning, '写不进去就得当场说，不能静默')
+assert.match(tooLongForTemp.warning, /实际能用的 \d+ 字/, '要说清这轮真实额度，不是整段 200：' + tooLongForTemp.warning)
+assert.match(tooLongForTemp.warning, /模型每回合都看不到它/)
+
+const fitsTemp = await writeWarn('temp', 'SHORT')
+assert.equal(fitsTemp.warning, '', '装得下就别吓唬人：' + JSON.stringify(fitsTemp.warning))
+console.log('9. 写入告警按「这轮实际能用的字数」算，不是整段 200 字')
+
+console.log('\n9 项全部通过')
 process.exit(0)

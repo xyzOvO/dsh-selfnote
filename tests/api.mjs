@@ -366,13 +366,13 @@ assert.ok(
 assert.ok(inj.overhead <= 40, '抬头要短，实测 ' + inj.overhead + ' 字')
 console.log('25. 注入快照：五段结构、字数与原文一致，抬头 ' + inj.overhead + ' 字')
 
-/* 26. 体检：五项都要有明确结论，不许只说「看起来正常」 */
+/* 26. 体检：六项都要有明确结论，不许只说「看起来正常」 */
 r = await call('GET', '/api/selfnote/doctor')
 assert.equal(r.status, 200)
 const doc = r.payload
 assert.equal(typeof doc.ok, 'boolean')
 assert.ok(['ok', 'warn', 'error'].includes(doc.level), '整体要有分级')
-for (const key of ['index', 'capture', 'facts', 'notes', 'auth']) {
+for (const key of ['index', 'capture', 'facts', 'notes', 'auth', 'beat']) {
   const check = doc.checks.find((item) => item.key === key)
   assert.ok(check, '缺了 ' + key + ' 这项')
   assert.ok(['ok', 'warn', 'error'].includes(check.level), key + ' 要有分级')
@@ -387,11 +387,11 @@ writeFileSync(factsFile, readFileSync(factsFile, 'utf8') + '{"id":"broken",\n')
 r = await call('GET', '/api/selfnote/doctor')
 assert.equal(r.payload.level, 'error', '有坏行就要报 error')
 assert.match(r.payload.checks.find((item) => item.key === 'facts').detail, /解析不出来/)
-/* 十条检查里人只会动第一条 —— 所以要给出「先做这一件」，而且必须是真有问题的那条 */
+/* 六项检查里人只会动第一条 —— 所以要给出「先做这一件」，而且必须是真有问题的那条 */
 assert.ok(r.payload.next, '有问题时要给出先做哪一件')
 assert.equal(r.payload.next.key, 'facts', '数据完整性排最前：文件坏了别的都白搭')
 assert.ok(String(r.payload.next.detail).length > 0)
-console.log('26. 体检：五项各有判据，坏行会被抓出来，并给出先做哪一件')
+console.log('26. 体检：六项各有判据，坏行会被抓出来，并给出先做哪一件')
 
 /* 27. 心跳：注入真的跑过才写。只读不写的状态文件等于没有状态 */
 injectionDef.text()
@@ -719,5 +719,25 @@ console.log('27. 心跳：注入一次就落一次盘')
   console.log('37. 注入抬头可改：真的成了第一行、超长被拒、清空后从内容开始')
 }
 
-console.log('\n40 项全部通过（data dir: ' + dir + '）')
+/* 38. 临时保质期可改（设置页那个输入框打的就是这条接口） */
+{
+  r = await call('POST', '/api/selfnote/config', { tempTtlDays: 21 })
+  assert.equal(r.status, 200, JSON.stringify(r.payload))
+  assert.equal(r.payload.tempTtlDays, 21, 'state 要把 tempTtlDays 交出去，设置页才有值可显示')
+  assert.equal(JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8')).tempTtlDays, 21)
+
+  for (const bad of [0, 91, -1, 'abc']) {
+    r = await call('POST', '/api/selfnote/config', { tempTtlDays: bad })
+    assert.equal(r.status, 400, 'tempTtlDays=' + bad + ' 该被拒')
+    assert.match(r.payload.error, /1–90/)
+  }
+  assert.equal(JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8')).tempTtlDays, 21, '被拒时不该改文件')
+
+  // 只发 tempTtlDays 不能把别的配置顺手清掉
+  const cfgBefore = JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8'))
+  assert.equal(cfgBefore.maxChars, 400, '别的键要原封不动')
+  console.log('38. 临时保质期可改：1–90 生效、越界 400 且不落盘、不动别的键')
+}
+
+console.log('\n41 项全部通过（data dir: ' + dir + '）')
 process.exit(0)

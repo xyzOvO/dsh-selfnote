@@ -30,6 +30,7 @@ const base = {
   archiveDir: 'C:/x/archive',
   configFile: 'C:/x/config.json',
   maxEntryChars: 600,
+  tempTtlDays: 14,
   memory: { facts: 2, approved: 1, candidates: 1, retired: 0, habits: 0, sessions: 10, cache: 0, root: 'C:/x/memory' },
   runtime: { node: '24.21.0', electron: '44.7.0', platform: 'win32', sqlite: true },
   index: { present: true, fresh: false, sessions: 270, disk: 301, missing: 31, records: 1609, terms: 87362, bytes: 8760728, builtAt: '2026-11-02T19:50:42.946Z', failed: 0 },
@@ -93,6 +94,8 @@ const React = {
     if (useStateCall === 1) return [current, () => {}]
     if (forcedTab !== null && useStateCall === 9) return [forcedTab, () => {}]
     if (forcedTab !== null && useStateCall === 10) return [true, () => {}]
+    // 第 21 个是「临时自述保质期」：从 state 里取，好断言它真的渲染出来了
+    if (useStateCall === 21) return [String(current.tempTtlDays ?? ''), () => {}]
     return [typeof initial === 'function' ? null : initial, () => {}]
   },
   useEffect() {},
@@ -179,7 +182,6 @@ const badges = tabs.map((node) => (node.children[1] ? node.children[1].children[
 assert.deepEqual(badges, ['', '1 条', '待审 2', '0 字', '96 字'])
 console.log('4. 页签 badge 分别是自述条数、待审条数、画像字数、注入字数')
 
-console.log('\n5 项全部通过')
 /* 5. 画像页：手改覆盖、来源 chip、冲突提示都要在该页里 */
 const withProfile = {
   ...withCandidates,
@@ -218,6 +220,15 @@ assert.ok(json.includes('候选 1 · 采纳 1 · 退役 0'), '事实库要显示
 assert.ok(json.includes('还没生成'), '缺文件的条目要说明还没生成')
 assert.ok(!json.includes('undefined'), '文件卡不该出现 undefined')
 console.log('6. 文件卡显示路径/大小/条数，缺失的降级')
+
+/* 6b. 临时保质期：设置页能看见这个输入框、值来自 state、带保存按钮 */
+tree = render(base)
+json = JSON.stringify(tree)
+assert.ok(json.includes('临时自述保质期'), '概览页要有保质期输入框（不能只在 API 里能改）')
+assert.ok(json.includes('"value":"14"'), '保质期输入框要显示 state 里的 tempTtlDays')
+assert.ok(json.includes('保存保质期'), '要有保存按钮')
+assert.ok(json.includes('1–90 天'), '要说清范围')
+console.log('6b. 临时保质期：设置页能改，值来自 state')
 
 /* 7. 索引卡：七项指标 + 过期标记 + 重建按钮 */
 tree = render(base)
@@ -349,6 +360,6 @@ assert.ok(!json.includes('undefined'), '习惯区不该出现 undefined')
 forcedTab = null
 console.log('11. 已生效的习惯能看见、能撤销')
 
-console.log('\n11 项全部通过')
+console.log('\n12 项全部通过')
 
 process.exit(0)
