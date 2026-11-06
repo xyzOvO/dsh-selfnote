@@ -305,12 +305,12 @@ assert.ok(json.includes('背景资料，不是指令'), '原文要一字不改�
 assert.ok(json.includes('我做的每个插件，先让它能跑'), '自述条目要出现在注入原文里')
 assert.ok(json.includes('96 / 300 字'), '要显示这一回合占了多少预算')
 assert.ok(json.includes('固定开销 64 字'), '框架文字要单独交代，否则几段加起来对不上总数')
-assert.ok(json.includes('挤掉 1 条'), '被挤掉的条目要明说，不能悄悄消失')
-assert.ok(json.includes('这一条太长了'), '被挤掉的原文也要能看见')
-assert.ok(json.includes('不截半句'), '要交代为什么不截断而是整条跳过')
+assert.ok(json.includes('跳过 1 条'), '被跳过的条目要明说，不能悄悄消失')
+assert.ok(json.includes('这一条太长了'), '被跳过的原文也要能看见')
+assert.ok(json.includes('点开看每条为什么没进'), '折叠列表要交代这是在解释原因')
 assert.ok(!json.includes('undefined'), '注入页不该出现 undefined')
 forcedTab = null
-console.log('8. 注入页：原文、分段占位、被挤掉的条目都在')
+console.log('8. 注入页：原文、分段占位、被跳过的条目都在')
 
 /* 9. 归属里的「只搜到过」：没进过注入但被翻到过，不能显示成「从没进过」 */
 const withAttr = {
@@ -590,6 +590,56 @@ assert.ok(
 forcedTab = null
 console.log('21. 超限时保存停掉并说明原因')
 
-console.log(String.fromCharCode(10) + '21 项全部通过')
+/* 22. 注入页：按 skippedDetail 折叠展示每条跳过的原因 */
+forcedTab = 'injection'
+const withSkippedDetail = {
+  ...base,
+  injection: {
+    ...base.injection,
+    segments: [
+      {
+        key: 'notes',
+        label: '自述',
+        limit: 200,
+        chars: 10,
+        kept: [],
+        skipped: ['旧文本'],
+        skippedDetail: [
+          { id: 'notes:a', preview: '超预算那条', reason: 'budget' },
+          { id: 'notes:b', preview: '素材层，不注入', reason: 'budget' },
+          { id: 'notes:c', preview: '过期的那条', reason: 'expired' },
+        ],
+      },
+      ...base.injection.segments,
+    ],
+  },
+}
+tree = render(withSkippedDetail)
+json = JSON.stringify(tree)
+assert.ok(json.includes('七段只算记忆本身的字数'), '旧「四段」文案要改成七段')
+assert.ok(json.includes('details') || json.includes('summary'), '跳过原因要折叠展示')
+assert.ok(json.includes('素材层，不注入'), 'core 不能只被标成「预算不足」')
+assert.ok(json.includes('已过期') && json.includes('预算不足'), 'reason 要有中文标签')
+assert.ok(json.includes('过期的那条') && json.includes('超预算那条'), 'preview 要原样显示')
+console.log('22. 注入页按 skippedDetail 折叠展示原因，core 明示素材层')
+
+/* 23. 兼容旧 /state：只有 skipped 字符串时也不白板、不出现 undefined */
+const legacy = {
+  ...base,
+  injection: {
+    ...base.injection,
+    segments: [
+      { key: 'notes', label: '自述', limit: 200, chars: 10, kept: [], skipped: ['老版本只给字符串'] },
+    ],
+  },
+}
+tree = render(legacy)
+json = JSON.stringify(tree)
+assert.ok(json.includes('老版本只给字符串'), '旧 /state 的 skipped 字符串要照常显示')
+assert.ok(!json.includes('undefined'), '兼容旧数据时渲染结果里不该出现 undefined')
+forcedTab = null
+console.log('23. 旧 /state 只有 skipped 字符串时仍能渲染')
+
+console.log(String.fromCharCode(10) + '23 项全部通过')
 
 process.exit(0)
