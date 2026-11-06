@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/version-0.14.1-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
-  <img src="https://img.shields.io/badge/tests-294%20passed-0ea5e9" alt="tests">
+  <img src="https://img.shields.io/badge/tests-280%20passed-0ea5e9" alt="tests">
 </p>
 
 ---
@@ -109,7 +109,7 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 | **人格** | 三段式人格（L0 核心身份 / L1 行为规则 / L2 扩展设定），带「还能写多少」的实时字数；「从 AGENT.md 导入」只填框、不保存；下面是纠偏证据列表 —— 勾几条、改写成一条规则、加进 L1 草稿，再点「保存人格」 | 人格字数 |
 | **记忆** | 待确认候选（冲突并排）、已采纳（带热度，**正文能就地改**）、可以升成习惯的标签、已生效的习惯（能撤销） | 有待审时显示「待审 N」 |
 | **画像** | 从已采纳记忆聚合的「关于你」，可手改覆盖，每句带来源 | 画像字数 |
-| **注入** | **这一回合真的会贴进提示词的那段原文**，外加每段占了多少字、哪些条目被挤掉 | 注入字数 |
+| **注入** | **这一回合真的会贴进提示词的那段原文**，外加每段占了多少字、哪些条目被跳过、每条为什么没进 | 注入字数 |
 
 有待审候选时直接落在「记忆」页，没有就停在「概览」；页签支持 ←/→/Home/End 切换。
 
@@ -170,7 +170,9 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 | 结论 | 90 字 | 同上 |
 | 习惯 | 40 字 | 同上 |
 
-被预算挤掉的条目会**列出来**，并标明「整条跳过，不截半句」—— 半句话会被当成结论读。这段文字来自 `assembleInjection()`（纯函数，不写盘、不记热度），所以设置页刷新一百次也不会把热度刷歪。
+被预算挤掉或已过期的条目会**列出来**：每段都给 `skippedDetail`，点开就能看见每条没进上下文的原因（`budget` / `expired`）；核心素材单列「素材层，不注入」，不会被误当成普通的预算竞争失败。这是**当前这一轮**的实时解释，不保存历史跳过记录 —— 实时可解释性不等于历史可追溯性。原文仍是「整条跳过，不截半句」—— 半句话会被当成结论读。这段文字来自 `assembleInjection()`（纯函数，不写盘、不记热度），所以设置页刷新一百次也不会把热度刷歪。
+
+另外，`/state` 顶层的 `injectionCount` / `lastInjectedAt` 记的是「注入文本真的返回给模型」的次数与最后时刻（缓存命中也算），与上面的 `skippedDetail` 是两条独立观测链路：一个回答「哪些没进、为什么」，一个回答「实际返回了几次」，不用 `seenCount`、预览次数或心跳计数代替。
 
 ### 注入归属：这条记忆到底有没有被用上
 
@@ -528,7 +530,7 @@ L2 为空时那句指路句也不发（不能指一条空路）。L2 有内容�
 ## 开发
 
 ```bash
-node --run test              # 294 项，21 个文件，无外部依赖
+node --run test              # 280 项，24 个文件，无外部依赖
 node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 ```
 
