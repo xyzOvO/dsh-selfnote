@@ -568,10 +568,28 @@ assert.equal(pmInput.props.value, String(base.profile.maxChars))
 forcedTab = 'persona'
 tree = render(base)
 const l2Field = collect(tree).find((node) => node.type === 'textarea' && node.props['data-field'] === 'l2')
-assert.equal(l2Field.props.maxLength, base.persona.l2Limit, 'L2 的 maxLength 直接用服务端算的 l2Limit')
+assert.equal(l2Field.props.maxLength, undefined, '不再用 maxLength 拦（它按 UTF-16 计，emoji 会被提前挡住）')
 forcedTab = null
 console.log('20. 半衰期/画像上限能改，L2 上限与服务端一致')
 
-console.log(String.fromCharCode(10) + '20 项全部通过')
+/* 21. 超限不靠 maxLength 拦：把保存停掉，并说清是哪一段超了 */
+forcedTab = 'persona'
+const overPersona = {
+  ...base,
+  persona: { ...base.persona, l0: '甲'.repeat(200), l0Chars: 200 },
+}
+tree = render(overPersona)
+nodes = collect(tree)
+const savePersonaBtn = nodes.find((node) => node.type === 'button' && node.children[0] === '保存人格')
+assert.ok(savePersonaBtn, '要有「保存人格」按钮')
+assert.equal(savePersonaBtn.props.disabled, true, 'L0 超 80 字时保存按钮要停掉')
+assert.ok(
+  nodes.some((node) => node.props && node.props.className === 'sn-hint-warn' && String(node.children[0]).includes('L0 超过 80 字')),
+  '停掉的同时要说清是哪一段超了',
+)
+forcedTab = null
+console.log('21. 超限时保存停掉并说明原因')
+
+console.log(String.fromCharCode(10) + '21 项全部通过')
 
 process.exit(0)

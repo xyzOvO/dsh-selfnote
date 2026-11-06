@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/version-0.14.1-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
-  <img src="https://img.shields.io/badge/tests-290%20passed-0ea5e9" alt="tests">
+  <img src="https://img.shields.io/badge/tests-294%20passed-0ea5e9" alt="tests">
 </p>
 
 ---
@@ -140,7 +140,7 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 写的时候用 `tier` 标明是哪一型（`core` / `stable` / `temp`，不写按 `stable` 算）。落盘长这样：
 
 ```
-- 2026-11-04 [核心*] 我叫鲸鲸。得意时会多说两句，但正事一律认真。
+- 2026-11-04 [核心*] 默认用中文回答，专业词顺手带一句白话解释。
 - 2026-11-04 [稳定] 回答先给结论，细节等他问。
 - 2026-11-04 [临时] 这周在查 DSH 远程主机连不上的问题。
 ```
@@ -497,7 +497,7 @@ L2 为空时那句指路句也不发（不能指一条空路）。L2 有内容�
 
 1. **`Host` 必须是回环地址或桌面壳（`dsh-app`）** —— 挡 DNS 重绑定；
 2. **带了 `Origin` 就必须同源** —— 跨站页面的请求根本发不出去（服务端不回 CORS 头）；
-3. **带了 `x-selfnote` 就必须等于本实例的 token** —— token 在首次启动时随机生成（或用 `DSH_SELFNOTE_TOKEN` 指定），存在 `~/.dsh/selfnote/auth-token`（权限 600）。**它不是写在文档里的固定值**，照抄 README 读不到你的记忆。
+3. **带了 `x-selfnote` 就必须等于本实例的 token** —— token 在首次启动时随机生成（或用 `DSH_SELFNOTE_TOKEN` 指定），存在 `~/.dsh/selfnote/auth-token`（POSIX 上 600；Windows 上 chmod 是空操作，靠用户目录自身的 ACL）。**它不是写在文档里的固定值**，照抄 README 读不到你的记忆。
 
 第 3 条是**可选**的：桌面壳的页面从 `dsh-app://app` 加载，拿不到注入的 token，所以页面不带也放行；脚本调用带上它更稳妥。
 
@@ -505,7 +505,7 @@ L2 为空时那句指路句也不发（不能指一条空路）。L2 有内容�
 
 **拒绝和成功的破坏性操作都记进 `~/.dsh/selfnote/auth.log`**：被拒的写 `reason`，成功清空自述的写 `action: 'clear'` + 清了几条 + 归档文件名。哪天自述突然空了，翻这个文件就知道是哪一次、几点、清了多少条。
 
-想用脚本自测，读 `~/.dsh/selfnote/auth-token`（权限 600），或自己设环境变量后带上它。
+想用脚本自测，读 `~/.dsh/selfnote/auth-token`（POSIX 600，Windows 靠用户目录 ACL），或自己设环境变量后带上它。
 
 ## 和 `dsh-agent-md` 的区别
 
@@ -528,7 +528,7 @@ L2 为空时那句指路句也不发（不能指一条空路）。L2 有内容�
 ## 开发
 
 ```bash
-node --run test              # 290 项，21 个文件，无外部依赖
+node --run test              # 294 项，21 个文件，无外部依赖
 node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 ```
 

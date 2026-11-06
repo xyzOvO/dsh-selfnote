@@ -270,5 +270,17 @@ savePersonaFile({ l0: '甲'.repeat(54), l1: '', l2: '' })
   console.log('23. l1Limit 按「扣掉换行」算，填满也存得进去')
 }
 
+// 24. 标题容错：`##L1`（没空格）也算一节；同一层级第二次出现且当前不在那一层时，当正文
+{
+  assert.equal(parsePersona('##L1\n没空格也算一节。\n').l1, '没空格也算一节。', '`##L1` 没空格也要算分节')
+
+  const source = renderPersona({ l0: '我是谁。', l1: '## L0 这句是正文，不是标题\n照旧。', l2: '' })
+  const back = parsePersona(source)
+  assert.equal(back.l0, '我是谁。', 'L0 只该有第一次那一节，不能被正文里的同名行抢走')
+  assert.equal(back.l1, '## L0 这句是正文，不是标题\n照旧。', 'L1 正文里以 `## L0` 开头的行要原样留在 L1')
+  assert.equal(parsePersona(source).l1, back.l1, 'round-trip 必须稳定')
+  console.log('24. `##L1` 也能分节；正文里的 `## L0` 不再抢层级')
+}
+
 rmSync(dir, { recursive: true, force: true })
-console.log('\n23 项全部通过')
+console.log('\n24 项全部通过')
