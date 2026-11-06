@@ -217,10 +217,18 @@ const longL0 = await personaOf()
 assert.ok(longL0.l0.chars <= 80)
 assert.equal(longL0.truncated, true)
 
-// 19. personaEnabled: false → 段不进，其余照常
+// 19. personaEnabled: false → 段仍在但零值（A 计划口径裁定 ①：启用时恒 7 段，text/overhead 不变）
 savePersonaFile({ l0: '我是大肥鱼。', l1: '- 先给结论。', l2: '' })
 boot({ personaEnabled: false })
-assert.equal((await stateOfNow()).injection.segments.find((seg) => seg.key === 'persona'), undefined)
+{
+  const off = (await stateOfNow()).injection
+  const seg = off.segments.find((item) => item.key === 'persona')
+  assert.equal(off.segments.length, 7, '启用时恒 7 段，人格单关也补零值段')
+  assert.equal(off.segments[0].key, 'persona', '零值段仍排第一')
+  assert.equal(seg.chars, 0, '零值段不占字数')
+  assert.deepEqual(seg.skippedDetail, [], '零值段没有跳过解释')
+  assert.ok(!off.text.includes('我是大肥鱼'), '关掉就不把人格正文塞进注入')
+}
 boot({})
 
 // 20. 缓存键跟着 persona.md 变
