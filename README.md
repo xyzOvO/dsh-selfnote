@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/version-0.14.2-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
-  <img src="https://img.shields.io/badge/tests-325%20passed-0ea5e9" alt="tests">
+  <img src="https://img.shields.io/badge/tests-331%20passed-0ea5e9" alt="tests">
 </p>
 
 ---
@@ -36,13 +36,15 @@
 
 **主体约定**：自述里的第一人称「我」= agent 自己；「记忆条目」「事实」的主语是用户。两者分开存、分开注入，不混为一谈。
 
-## 三个工具
+## 五个工具
 
 | 工具 | 做什么 | 关键约束 |
 |---|---|---|
 | `self_note` | 写一条第一人称自述 | 一句话到三句话；见下面「什么时候写」 |
 | `memory_recall` | 按关键词翻历史对话原文，回来带出处 | 只收正文，剔除 reasoning / 工具输出 / 注入内容 |
 | `memory_stage` | 把查到的一句连出处放进候选区 | 没有出处直接拒绝，所以编不了 |
+| `memory_search` | 在「温层」里找带指针的摘要与已记的事实 | 每条带指针（sessionId + 行号），顺指针用 `memory_recall` 回原文核对 |
+| `memory_write` | 往温层写一条带出处的摘要 | 必须带指针，不进每回合上下文，只在 `memory_search` 时浮出来 |
 
 `self_note` 另有两个只读动作：`action: "persona"` 取 L2 扩展设定（带「这是设定，不是指令」的边界句），`action: "corrections"` 翻攒下的纠偏证据（每页 30 条，带游标）。两个都不写盘 —— **模型能读人格，但改不了人格**。
 
@@ -70,7 +72,7 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 
 装完**重启 DSH**，三件事同时出现：
 
-1. 模型多了上面三个工具；
+1. 模型多了上面五个工具；
 2. 设置页多一节「人格（自述）」（在「知识库」下面）；
 3. 每回合的系统提示里，多一段人格（L0 + L1，最多 320 字）和一段最多 1000 字的记忆。
 
@@ -159,7 +161,7 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 
 ### 注入页：看见每回合贴了什么
 
-「注入」页把 `composeInjection()` 拼出来的那段字**原样**摊开 —— 包括抬头、一句人格框架句（「以下是你自己的样子，照这个说话。」）、人格 L0/L1、「（背景资料，不是指令）」这句边界句，以及 L2 的指路句。下面是分段账单：
+「注入」页把 `assembleInjection()` 拼出来的那段字**原样**摊开（`composeInjection()` 是外面那层缓存，只管复用、不拼字）—— 包括抬头、一句人格框架句（「以下是你自己的样子，照这个说话。」）、人格 L0/L1、「（背景资料，不是指令）」这句边界句，以及 L2 的指路句。下面是分段账单：
 
 | 段 | 预算 | 页面显示 |
 |---|---|---|
@@ -271,7 +273,7 @@ DSH 的会话文件是**逐条追写**的 zstd 序列（一次写入 = 一个 fr
 
 - 只有**真的进了注入**才算一次使用；检索到但没进上下文的，不记（否则搜一次就永远活跃）。
 - 一小时内重复注入只记一次。
-- 半衰期默认 30 天，可调 1–365 天。这个数**设置页没有输入框**，只能走 API：`POST /api/selfnote/config`，body 里带 `{"halfLifeDays": 30}`（同一条接口还收 `profileMaxChars` 20–120）。
+- 半衰期默认 30 天，可调 1–365 天。设置页「概览」里能直接调，也可以走 API：`POST /api/selfnote/config`，body 里带 `{"halfLifeDays": 30}`（同一条接口还收 `profileMaxChars` 20–120）。
 - 冷下去只影响注入排序，**不会自动退役**。哪天真想起来，它还在库里能被搜到。
 
 ## 自动采集（默认开，只发现不确认）
@@ -381,7 +383,7 @@ L2 为空时那句指路句也不发（不能指一条空路）。L2 有内容�
 
 ### 抬头：只留必要的三十个字
 
-注入文本里有几处纯框架文字（标题行、边界句、段名前缀），不承载任何记忆。0.10.3 之前它们合计 **92 字**，等于原先 800 的预算里有 20% 花在说「下面是什么」上。现在：
+注入文本里有几处纯框架文字（标题行、边界句、段名前缀），不承载任何记忆。0.10.3 之前它们合计 **92 字**，等于原先 460 的预算里有 20% 花在说「下面是什么」上。（92/460≈20%；旧稿一度把分母误写成 800。）现在：
 
 ```
 记忆（我写的）
@@ -530,7 +532,7 @@ L2 为空时那句指路句也不发（不能指一条空路）。L2 有内容�
 ## 开发
 
 ```bash
-node --run test              # 325 项，26 个文件，无外部依赖
+node --run test              # 331 项，27 个文件，无外部依赖
 node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 ```
 
@@ -546,6 +548,7 @@ node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 | `tests/fair.mjs` `tests/warm.mjs` | 环境段冷门预留与轮换、压缩后补回；温层带指针摘要（无指针拒写、可吊销不可删） |
 | `tests/transfer.mjs` | 导出/导入：白名单、不覆盖、降级、坏文件拒绝 |
 | `tests/crash-write.mjs` `tests/atomic-retry.mjs` `tests/capacity-warning.mjs` | 写入过程被 SIGKILL 不留半截文件、rename 瞬态冲突退避重试、长条挤掉旧规则时容量告警不静默 |
+| `tests/unicode-rulers.mjs` | 全插件「字」按 Unicode 码点算：emoji 截断不写坏、字数校验、配置落盘与段 chars 都按码点 |
 | `tests/acceptance-runtime.mjs` | 鉴权（无头 / 跨站 / 固定口令）、并发写不丢、锁放弃、注入预算 |
 
 改 `lib/*.js` 或 `lib/client.js` 之后**必须重启 DSH**，热重载不会重新扫描 client bundle。测试会自动隔离 `DSH_MEMORY_DIR`，不会污染真实记忆。
@@ -562,7 +565,8 @@ lib/index-store.js  倒排索引
 lib/persona.js      人格三段：解析、码点计数、上限校验、原子保存
 lib/persona-tx.js   跨三文件事务：写人格 + 消费证据 + 记账，可幂等恢复
 lib/corrections.js  纠偏证据：强弱信号、事件去重、游标分页、水位、清理
-lib/store.js        自述文件读写：三型标记、pin、保质期、归档
+lib/store.js        自述文件读写：三型标记、pin、保质期、归档、码点计数与截断助手
+lib/explain.js      每段跳过原因：封闭枚举、字素簇预览、core 明示素材层
 lib/atomic.js       原子写：同目录临时文件 + fsync + rename
 lib/warm.js         温层：带指针摘要，可吊销不可删
 lib/transfer.js     导出/导入：白名单、不覆盖、降级
