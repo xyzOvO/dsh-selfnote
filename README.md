@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/version-0.14.2-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
-  <img src="https://img.shields.io/badge/tests-280%20passed-0ea5e9" alt="tests">
+  <img src="https://img.shields.io/badge/tests-325%20passed-0ea5e9" alt="tests">
 </p>
 
 ---
@@ -530,7 +530,7 @@ L2 为空时那句指路句也不发（不能指一条空路）。L2 有内容�
 ## 开发
 
 ```bash
-node --run test              # 280 项，24 个文件，无外部依赖
+node --run test              # 325 项，26 个文件，无外部依赖
 node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 ```
 
@@ -545,7 +545,7 @@ node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 | `tests/capture.mjs` `tests/capture-p1b.mjs` `tests/capture-debug.mjs` | 触发词、去重合并、游标幂等与崩溃恢复、迟到事件（空洞）、采集轨迹落点 |
 | `tests/fair.mjs` `tests/warm.mjs` | 环境段冷门预留与轮换、压缩后补回；温层带指针摘要（无指针拒写、可吊销不可删） |
 | `tests/transfer.mjs` | 导出/导入：白名单、不覆盖、降级、坏文件拒绝 |
-| `tests/crash-write.mjs` | 写入过程中被 SIGKILL：notes.md / config.json 不留半截文件 |
+| `tests/crash-write.mjs` `tests/atomic-retry.mjs` `tests/capacity-warning.mjs` | 写入过程被 SIGKILL 不留半截文件、rename 瞬态冲突退避重试、长条挤掉旧规则时容量告警不静默 |
 | `tests/acceptance-runtime.mjs` | 鉴权（无头 / 跨站 / 固定口令）、并发写不丢、锁放弃、注入预算 |
 
 改 `lib/*.js` 或 `lib/client.js` 之后**必须重启 DSH**，热重载不会重新扫描 client bundle。测试会自动隔离 `DSH_MEMORY_DIR`，不会污染真实记忆。
