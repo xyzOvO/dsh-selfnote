@@ -27,7 +27,7 @@
     "assets"
   ],
   "scripts": {
-    "test": "node tests/smoke.mjs && node tests/memory.mjs && node tests/roles.mjs && node tests/heat.mjs && node tests/fair.mjs && node tests/capture-debug.mjs && node tests/facts-tx.mjs && node tests/crash-write.mjs && node tests/capture.mjs && node tests/capture-p1b.mjs && node tests/index.mjs && node tests/incremental.mjs && node tests/profile.mjs && node tests/warm.mjs && node tests/transfer.mjs && node tests/api.mjs && node tests/explain.mjs && node tests/skipped.mjs && node tests/injection-count.mjs && node tests/notes-tier.mjs && node tests/capacity-warning.mjs && node tests/atomic-retry.mjs && node tests/unicode-rulers.mjs && node tests/persona.mjs && node tests/corrections.mjs && node tests/client-state.mjs && node tests/client.mjs",
+    "test": "node tests/smoke.mjs && node tests/memory.mjs && node tests/roles.mjs && node tests/heat.mjs && node tests/fair.mjs && node tests/capture-debug.mjs && node tests/facts-tx.mjs && node tests/crash-write.mjs && node tests/capture.mjs && node tests/capture-p1b.mjs && node tests/index.mjs && node tests/incremental.mjs && node tests/profile.mjs && node tests/warm.mjs && node tests/transfer.mjs && node tests/api.mjs && node tests/explain.mjs && node tests/skipped.mjs && node tests/injection-count.mjs && node tests/notes-tier.mjs && node tests/capacity-warning.mjs && node tests/atomic-retry.mjs && node tests/unicode-rulers.mjs && node tests/transfer-roundtrip.mjs && node tests/r3-regressions.mjs && node tests/persona.mjs && node tests/corrections.mjs && node tests/client-state.mjs && node tests/client.mjs",
     "test:accept": "node tests/acceptance-runtime.mjs"
   },
   "engines": {

@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/version-0.14.2-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
-  <img src="https://img.shields.io/badge/tests-331%20passed-0ea5e9" alt="tests">
+  <img src="https://img.shields.io/badge/tests-349%20passed-0ea5e9" alt="tests">
 </p>
 
 ---
@@ -524,7 +524,7 @@ L2 为空时那句指路句也不发（不能指一条空路）。L2 有内容�
 
 设置页「迁移」卡两个按钮，全程在你自己的浏览器与磁盘之间。导出的包是 **v2**：比 v1 多带人格三段（`persona`）与两个配置项（`personaEnabled` / `tempTtlDays`）。**纠偏证据不进包** —— 它是「这台机器上发生过什么」，不是人格本身。v1 老包照样能导进来，缺的字段按默认补；目标机已有不同人格时不覆盖，落成 `persona.imported-<时间戳>.md`。
 
-- **导出**：一份 JSON（`selfnote-YYYY-MM-DD.json`），含自述、facts、习惯，以及你可调的那几项配置。
+- **导出**：一份 JSON（`selfnote-YYYY-MM-DD.json`），含自述（分型与钉住也跟着走）、facts、习惯，以及你可调的那几项配置；导入时配置只按白名单与基本类型落盘。
 - **导入**：在新机器上选这份文件。规则只有三条 —— **不覆盖**（同 id、同正文都跳过）、**默认降级**（导进来的「已采纳」一律变回候选，勾了「保留原状态」才原样搬）、**坏文件直接拒**（不是本插件的包、版本比本机新，都返回 400，不会合并一半）。
 
 索引不跟着搬：它记的是本机磁盘路径与会话 mtime，换个地方必然过期。导入后重新构建一次就行（设置页「索引」卡）。
@@ -532,7 +532,7 @@ L2 为空时那句指路句也不发（不能指一条空路）。L2 有内容�
 ## 开发
 
 ```bash
-node --run test              # 331 项，27 个文件，无外部依赖
+node --run test              # 349 项，29 个文件，无外部依赖
 node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 ```
 
@@ -546,7 +546,8 @@ node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 | `tests/corrections.mjs` | 纠偏证据：强弱信号与误命中、事件级去重、分页游标、200 条上限、按 usedAt 清理、水位不回填、跨三文件事务的幂等恢复与坏日志隔离、指纹计数 |
 | `tests/capture.mjs` `tests/capture-p1b.mjs` `tests/capture-debug.mjs` | 触发词、去重合并、游标幂等与崩溃恢复、迟到事件（空洞）、采集轨迹落点 |
 | `tests/fair.mjs` `tests/warm.mjs` | 环境段冷门预留与轮换、压缩后补回；温层带指针摘要（无指针拒写、可吊销不可删） |
-| `tests/transfer.mjs` | 导出/导入：白名单、不覆盖、降级、坏文件拒绝 |
+| `tests/transfer.mjs` `tests/transfer-roundtrip.mjs` | 导出/导入：白名单、不覆盖、降级、坏文件拒绝；自述三型 / pin / 配置跟着往返 |
+| `tests/r3-regressions.mjs` | 全量审查回归：采集正文、索引原型键、坏行隔离、缓存键与 UI 可读性 |
 | `tests/crash-write.mjs` `tests/atomic-retry.mjs` `tests/capacity-warning.mjs` | 写入过程被 SIGKILL 不留半截文件、rename 瞬态冲突退避重试、长条挤掉旧规则时容量告警不静默 |
 | `tests/unicode-rulers.mjs` | 全插件「字」按 Unicode 码点算：emoji 截断不写坏、字数校验、配置落盘与段 chars 都按码点 |
 | `tests/acceptance-runtime.mjs` | 鉴权（无头 / 跨站 / 固定口令）、并发写不丢、锁放弃、注入预算 |
