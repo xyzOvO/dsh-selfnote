@@ -60,17 +60,17 @@ writeFileSync(
   JSON.stringify({
     id: 'env1',
     text: '推 GitHub 要代理',
-    detail: 'HTTPS_PROXY=http://127.0.0.1:7897，账号 xyzOvO，gh 在 ~/.dsh/plugins/gh-cli',
+    detail: 'HTTPS_PROXY=http://proxy.invalid:7897，账号 demoUser，gh 在 /tmp/gh-cli',
     channel: 'env',
     status: 'approved',
     tags: ['环境'],
     created: '2026-11-03',
   }) + '\n',
 )
-found = searchWarm('xyzOvO 代理')
+found = searchWarm('demoUser 代理')
 assert.ok(found.hits.some((item) => item.id === 'env1' && item.kind === 'fact'), '要能从 detail 里搜到环境事实')
 const envHit = found.hits.find((item) => item.id === 'env1')
-assert.match(envHit.detail, /xyzOvO/)
+assert.match(envHit.detail, /demoUser/)
 console.log('6. 环境事实的原文段落也能被搜到')
 
 /* 7. 吊销：不删，标 void，检索不再返回 */
