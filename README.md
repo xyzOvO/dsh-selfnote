@@ -117,7 +117,51 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 
 ### 复盘候选：自动只到提议
 
-`selfnote_review` 读当场纠正、核回会话原文，产出证据包和待批候选；设置页「记忆」页可以收集证据、生成 skill 草案、送入现有候选区或丢弃。第一版不建定时任务，不写自述、不改 `AGENTS.md`、不写正式 skill，也不把 facts 自动改成 `approved`。真正生效仍要人在现有记忆页点「采纳」。
+`selfnote_review` 读当场纠正、核回会话原文，产出证据包和待批候选；设置页「记忆」页可以收集证据、生成 skill 草案、送入现有候选区或丢弃。第一版插件不内置定时任务（想每天自动触发见下，用宿主定时器），不写自述、不改 `AGENTS.md`、不写正式 skill，也不把 facts 自动改成 `approved`。真正生效仍要人在现有记忆页点「采纳」。
+
+#### 手动跑一次
+
+1. 在设置页「记忆」页点「收集证据」：`selfnote_review` 的 `collect` 会从当场纠正里挑出可用证据，逐条用 `checkCitation()` 核回会话原文，只把原话、`sessionId + index`、日期和少量前后文写进证据包，不导出整份会话。
+2. 对当前 agent 说一句「跑一次复盘」（或把下面的完整提示词贴过去）。agent 用 `propose` 把证据聚成待批候选；插件按风险分级和样本量把关，不合格的当场打回。
+3. 回到「记忆」页看候选：每条带出处、样本数、风险类型，由人点「送入候选区」「生成草案」或「丢弃」。
+
+最短提示词：
+
+```text
+跑一次 dsh-selfnote 复盘：只生成待批候选、报告和草案，不自动生效。
+```
+
+完整提示词（可按需改；别把真实会话正文、凭据或个人信息贴进来）：
+
+```text
+请跑一次 dsh-selfnote 复盘，自动只到「提议」为止：
+1. 用 selfnote_review 的 collect 读当场纠正并核回原文，不复制整份会话。
+2. 用 propose 生成候选，每条带 evidence[]（保留 sessionId、index、quote、date、source），正文 ≤240 字，标 risk=procedure/behavior/permission。
+3. behavior / permission 至少 3 个同类样本、来自 ≥2 个会话，且带一个边界或反例样本；procedure 只有一个样本时必须 verified=true。sampleCount 以去重后的 evidence 数为准，别虚报。
+4. 只写候选文件、报告和 skill 草案；不调用 self_note、不改 AGENTS.md、不创建正式 skill、不把 facts 改成 approved、不自动批准。
+5. 最后回报：扫描几条、核回几条、生成几条候选、打回几条、待批文件路径。
+```
+
+#### 每天早上自动跑（可选）
+
+第一版插件不内置定时器。要让 DSH 每天自动开一个复盘回合，用宿主的 `schedule_create` 起一个固定会话当「闹钟」，它只负责把提示词按时递给 agent，不自己写规则。示例参数：
+
+```text
+title:  生成 dsh-selfnote 复盘候选
+target: new_once
+rrule:
+  DTSTART;TZID=Asia/Shanghai:20261115T082000
+  RRULE:FREQ=DAILY
+prompt: 跑一次 dsh-selfnote 复盘：只生成待批候选、报告和草案，不自动生效，结束后回报扫描 / 生成 / 打回数量。
+```
+
+把日期时间和时区换成你自己的习惯（例如早上 08:20）；`rrule` 里 `DTSTART` 与 `RRULE` 各占一行。`target: new_once` 每天投递到同一个会话，保留前一天的批注上下文；机器没开机时只补投最近一次错过的时间点。**创建定时任务需要你明确说一声，插件不会替你建**；不建的话默认仍是手动触发。
+
+#### 效果与边界
+
+- **能达到**：每天自动整理证据包（去重、核出处）、按风险分级生成待批候选与报告；早上打开就有一份「待批 N 条」清单，逐条带出处和样本数。
+- **不能达到**：不会自动把候选变成生效规则，不会写自述 / `AGENTS.md` / 正式 skill，不会把 facts 改成 `approved`，不会复制整份会话。草案只落在复盘草稿区，不是 skill；「送入候选区」也只写 `status: 'candidate'`，仍要人在记忆页点「采纳」。
+- **隐私**：证据包只存原话、`sessionId + index` 与少量局部上下文；纠偏证据不进迁移包（见「迁移」节）；候选、报告、草案只落本机。定时任务的提示词里不要贴真实会话正文、姓名、账号、凭据、路径、地址、健康或财务信息，也不要把候选报告转发到外部服务。
 
 ### 注入里那句话，能改也能删
 
