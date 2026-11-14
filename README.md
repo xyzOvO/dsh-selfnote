@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/version-0.14.3-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
-  <img src="https://img.shields.io/badge/tests-349%20passed-0ea5e9" alt="tests">
+  <img src="https://img.shields.io/badge/tests-353%20passed-0ea5e9" alt="tests">
 </p>
 
 ---
@@ -532,7 +532,7 @@ L2 为空时那句指路句也不发（不能指一条空路）。L2 有内容�
 ## 开发
 
 ```bash
-node --run test              # 349 项，29 个文件，无外部依赖
+node --run test              # 353 项，30 个文件，无外部依赖
 node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 ```
 
@@ -548,6 +548,7 @@ node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 | `tests/fair.mjs` `tests/warm.mjs` | 环境段冷门预留与轮换、压缩后补回；温层带指针摘要（无指针拒写、可吊销不可删） |
 | `tests/transfer.mjs` `tests/transfer-roundtrip.mjs` | 导出/导入：白名单、不覆盖、降级、坏文件拒绝；自述三型 / pin / 配置跟着往返 |
 | `tests/r3-regressions.mjs` | 全量审查回归：采集正文、索引原型键、坏行隔离、缓存键与 UI 可读性 |
+| `tests/r4-regressions.mjs` | 收尾回归：相对时间夹具、画像注入上限、环境门牌预算、坏索引线性兜底 |
 | `tests/crash-write.mjs` `tests/atomic-retry.mjs` `tests/capacity-warning.mjs` | 写入过程被 SIGKILL 不留半截文件、rename 瞬态冲突退避重试、长条挤掉旧规则时容量告警不静默 |
 | `tests/unicode-rulers.mjs` | 全插件「字」按 Unicode 码点算：emoji 截断不写坏、字数校验、配置落盘与段 chars 都按码点 |
 | `tests/acceptance-runtime.mjs` | 鉴权（无头 / 跨站 / 固定口令）、并发写不丢、锁放弃、注入预算 |

@@ -17,6 +17,8 @@ const memory = await import('../lib/memory.js')
 const { apply } = await import('../lib/index.js')
 
 const pad = (marker) => marker + '说明'.repeat(28) // 约 60 字，逼近真实环境备忘的长度
+// 热度按半衰期衰减：夹具必须相对当前时刻造，写死日历日期隔几天就会反过来
+const stamp = (offsetMs = 0) => new Date(Date.now() + offsetMs).toISOString()
 
 function writeEnvFacts(rows) {
   writeFileSync(
@@ -46,7 +48,7 @@ function boot(sessionId) {
 
 /* 1. 冷门预留：热的一直赢，但预留那 1/4 得留给从没进过的 */
 writeEnvFacts([
-  ...Array.from({ length: 8 }, (_, i) => ({ id: 'hot' + i, text: pad('热的' + i), hitCount: 9, lastHit: '2026-11-03T00:00:00Z' })),
+  ...Array.from({ length: 8 }, (_, i) => ({ id: 'hot' + i, text: pad('热的' + i), hitCount: 9, lastHit: stamp(-2 * 60 * 60 * 1000) })),
   ...Array.from({ length: 4 }, (_, i) => ({ id: 'cold' + i, text: pad('冷的' + i) })),
 ])
 const s1 = boot('s1')
@@ -71,7 +73,7 @@ assert.notDeepEqual(coldInSecond, coldInFirst, '第二轮该换成还没进过�
 console.log('2. 冷门条目排队轮换（' + JSON.stringify(coldInFirst) + ' → ' + JSON.stringify(coldInSecond) + '）')
 
 /* 3. 压缩之后补偿：新条目挤掉旧条目，压缩后下一轮把旧的补回来，只补一次 */
-writeEnvFacts(Array.from({ length: 6 }, (_, i) => ({ id: 'old' + i, text: pad('旧的' + i), hitCount: 8, lastHit: '2026-11-03T05:00:00Z' })))
+writeEnvFacts(Array.from({ length: 6 }, (_, i) => ({ id: 'old' + i, text: pad('旧的' + i), hitCount: 8, lastHit: stamp(-24 * 60 * 60 * 1000) })))
 const before = s1.text()
 const markerOf = (text) => [0, 1, 2, 3, 4, 5].filter((i) => text.includes('旧的' + i + '说'))
 const injectedBefore = markerOf(before)
@@ -82,7 +84,7 @@ assert.ok(injectedBefore.length > 0, '先得真的有旧条目进过注入')
 const touched = memory.readFacts()
 writeEnvFacts([
   ...touched,
-  ...Array.from({ length: 8 }, (_, i) => ({ id: 'new' + i, text: pad('新的' + i), hitCount: 20, lastHit: '2026-11-04T05:00:00Z' })),
+  ...Array.from({ length: 8 }, (_, i) => ({ id: 'new' + i, text: pad('新的' + i), hitCount: 20, lastHit: stamp() })),
 ])
 // 换个会话做对照：没有压缩补偿，旧条目应当被挤出
 const control = boot('s2').text()
@@ -108,13 +110,13 @@ console.log('4. 补偿只补一轮')
 /* 5. 会话记录 id 与 header.id 不一致时也要认得出是同一个会话
    换个前缀重做一遍 3 号场景：压缩事件带的 id 是别的值，header.id 才是这个会话。 */
 const markerOf5 = (text) => [0, 1, 2, 3, 4, 5].filter((i) => text.includes('第五' + i + '说'))
-writeEnvFacts(Array.from({ length: 6 }, (_, i) => ({ id: 'k' + i, text: pad('第五' + i), hitCount: 8, lastHit: '2026-11-03T05:00:00Z' })))
+writeEnvFacts(Array.from({ length: 6 }, (_, i) => ({ id: 'k' + i, text: pad('第五' + i), hitCount: 8, lastHit: stamp(-24 * 60 * 60 * 1000) })))
 const s5 = boot('s5')
 const injected5 = markerOf5(s5.text())
 assert.ok(injected5.length > 0, '先得真的有条目进过注入')
 writeEnvFacts([
   ...memory.readFacts(),
-  ...Array.from({ length: 8 }, (_, i) => ({ id: 'n5' + i, text: pad('五批新' + i), hitCount: 20, lastHit: '2026-11-04T05:00:00Z' })),
+  ...Array.from({ length: 8 }, (_, i) => ({ id: 'n5' + i, text: pad('五批新' + i), hitCount: 20, lastHit: stamp() })),
 ])
 const squeezed5 = markerOf5(boot('s6').text())
 assert.ok(squeezed5.length < injected5.length, '新条目进来后旧条目该被挤掉（' + JSON.stringify(squeezed5) + ' < ' + JSON.stringify(injected5) + '）')
