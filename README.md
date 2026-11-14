@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/version-0.14.4-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
-  <img src="https://img.shields.io/badge/tests-353%20passed-0ea5e9" alt="tests">
+  <img src="https://img.shields.io/badge/tests-367%20passed-0ea5e9" alt="tests">
 </p>
 
 ---
@@ -109,11 +109,15 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 | **概览** | 注入开关、**注入抬头**（那段的第一行，≤24 字）、存储上限（字 / 条，只影响磁盘，不影响注入量）、**临时自述保质期**（1–90 天）、本回合注入的预算条（人格 / 自述 / 画像 / 环境 / 结论 / 习惯）、索引八项指标、索引开关与重建按钮、**文件区**（8 个记忆位置，含自述归档目录，带条数 / 大小 / 最后修改，一键打开） | — |
 | **自述** | 手动写一条（可选**三型**：核心 / 稳定 / 临时）、清空（进归档）、现在生效的自述列表（**每条能就地改措辞、改型、★ 钉住、删**，删的进归档；过期的临时条目标「已过期」） | 自述条数 |
 | **人格** | 三段式人格（L0 核心身份 / L1 行为规则 / L2 扩展设定），带「还能写多少」的实时字数；「从 AGENT.md 导入」只填框、不保存；下面是纠偏证据列表 —— 勾几条、改写成一条规则、加进 L1 草稿，再点「保存人格」 | 人格字数 |
-| **记忆** | 待确认候选（冲突并排）、已采纳（带热度，**正文能就地改**）、可以升成习惯的标签、已生效的习惯（能撤销） | 有待审时显示「待审 N」 |
+| **记忆** | **复盘候选**（带出处、样本数、风险分级；只能生成草案 / 送入候选区 / 丢弃）、待确认候选（冲突并排）、已采纳（带热度，**正文能就地改**）、可以升成习惯的标签、已生效的习惯（能撤销） | 有待审时显示「待审 N」 |
 | **画像** | 从已采纳记忆聚合的「关于你」，自动聚合的每句带来源；也能手改成一整段覆盖（落盘最多 240 码点，注入时按画像段上限截断） | 画像字数 |
 | **注入** | **这一回合真的会贴进提示词的那段原文**，外加每段占了多少字、哪些条目被跳过、每条为什么没进 | 注入字数 |
 
 有待审候选时直接落在「记忆」页，没有就停在「概览」；页签支持 ←/→/Home/End 切换。
+
+### 复盘候选：自动只到提议
+
+`selfnote_review` 读当场纠正、核回会话原文，产出证据包和待批候选；设置页「记忆」页可以收集证据、生成 skill 草案、送入现有候选区或丢弃。第一版不建定时任务，不写自述、不改 `AGENTS.md`、不写正式 skill，也不把 facts 自动改成 `approved`。真正生效仍要人在现有记忆页点「采纳」。
 
 ### 注入里那句话，能改也能删
 
@@ -534,7 +538,7 @@ L2 为空时那句指路句也不发（不能指一条空路）。L2 有内容�
 ## 开发
 
 ```bash
-node --run test              # 353 项，30 个文件，无外部依赖
+node --run test              # 367 项，31 个文件，无外部依赖
 node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 ```
 
@@ -551,6 +555,7 @@ node --run test:accept       # 12 项：真实 HTTP + 36 进程并发写
 | `tests/transfer.mjs` `tests/transfer-roundtrip.mjs` | 导出/导入：白名单、不覆盖、降级、坏文件拒绝；自述三型 / pin / 配置跟着往返 |
 | `tests/r3-regressions.mjs` | 全量审查回归：采集正文、索引原型键、坏行隔离、缓存键与 UI 可读性 |
 | `tests/r4-regressions.mjs` | 收尾回归：相对时间夹具、画像注入上限、环境门牌预算、坏索引线性兜底 |
+| `tests/review.mjs` | 复盘第一版：证据包核出处、去重与孤证打回、候选硬门槛、坏行隔离、stage / discard / draft 不自动生效、工具与 `/review` API |
 | `tests/crash-write.mjs` `tests/atomic-retry.mjs` `tests/capacity-warning.mjs` | 写入过程被 SIGKILL 不留半截文件、rename 瞬态冲突退避重试、长条挤掉旧规则时容量告警不静默 |
 | `tests/unicode-rulers.mjs` | 全插件「字」按 Unicode 码点算：emoji 截断不写坏、字数校验、配置落盘与段 chars 都按码点 |
 | `tests/acceptance-runtime.mjs` | 鉴权（无头 / 跨站 / 固定口令）、并发写不丢、锁放弃、注入预算 |
@@ -569,6 +574,7 @@ lib/index-store.js  倒排索引
 lib/persona.js      人格三段：解析、码点计数、上限校验、原子保存
 lib/persona-tx.js   跨三文件事务：写人格 + 消费证据 + 记账，可幂等恢复
 lib/corrections.js  纠偏证据：强弱信号、事件去重、游标分页、水位、清理
+lib/review.js       复盘候选：证据包、风险分级、待批文件、报告、草案与审批入口
 lib/store.js        自述文件读写：三型标记、pin、保质期、归档、码点计数与截断助手
 lib/explain.js      每段跳过原因：封闭枚举、字素簇预览、core 明示素材层
 lib/atomic.js       原子写：同目录临时文件 + fsync + rename

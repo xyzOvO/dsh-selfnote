@@ -51,7 +51,7 @@ apply(ctx, {})
 
 assert.ok(handler, '没有注册 /api/selfnote 路由')
 const toolNames = toolHold.map((tool) => tool.name)
-assert.deepEqual(toolNames, ['self_note', 'memory_recall', 'memory_stage', 'memory_search', 'memory_write'])
+assert.deepEqual(toolNames, ['self_note', 'memory_recall', 'memory_stage', 'memory_search', 'memory_write', 'selfnote_review'])
 assert.equal(toolHold[0].output.render({}, { action: 'stats', entries: 0, chars: 0, maxChars: 1, maxEntries: 1, archiveFiles: 0 })[0].type, 'text')
 assert.equal(toolHold[1].output.render({}, { query: 'x', raw: { total: 0 } })[0].type, 'text')
 
