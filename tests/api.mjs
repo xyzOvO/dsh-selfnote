@@ -835,7 +835,7 @@ assert.ok('l0' in importedPersona.payload && 'l1' in importedPersona.payload && 
 assert.equal(sha256OfCurrentPersona(), shaBeforeImport, '导入不等于采纳：不许自动保存')
 console.log('51. 从 AGENT.md 导入只填空，不保存')
 
-/* 52. state 与体检：人格/纠偏各一段，体检八项 */
+/* 52. state 与体检：人格/纠偏各一段，体检六组十四项 */
 st = (await call('GET', '/api/selfnote/state')).payload
 assert.equal(st.persona.l0Limit, 80)
 assert.equal(st.persona.fileLimit, 8000)
@@ -844,13 +844,35 @@ assert.equal(typeof st.corrections.total, 'number')
 assert.equal(Array.isArray(st.corrections.items), true, '界面靠 items 渲染勾选区，只给计数等于让这条链路死掉')
 const doctorDoc = (await call('GET', '/api/selfnote/doctor')).payload
 const keys = doctorDoc.checks.map((check) => check.key)
-// 八项固定 + 「解不开的会话」按需追加 —— 固定项一个不许少，也不许悄悄长出去
-const BASE = ['index', 'capture', 'facts', 'notes', 'auth', 'persona', 'corrections', 'beat']
+// 六组固定：组是给人扫的分类，顺序不许漂
+const GROUP_KEYS = ['load', 'files', 'inject', 'segments', 'persona', 'index']
+assert.deepEqual(doctorDoc.groups.map((group) => group.key), GROUP_KEYS, '体检分组固定为六组，顺序不许变')
+for (const group of doctorDoc.groups) {
+  assert.ok(group.items.length > 0, group.key + ' 组是空的 —— 界面上会出现一个空壳')
+  assert.equal(group.counts.total, group.items.length, group.key + ' 的计数与项数要对得上')
+}
+// 每一项都必须归进其中一组：漏推 group 的检查会在界面上凭空消失
+assert.equal(doctorDoc.checks.every((check) => GROUP_KEYS.includes(check.group)), true, '有检查项没归组')
+// 固定项一个不许少，也不许悄悄长出去
+const BASE = ['plugin', 'auth', 'beat', 'facts', 'habits', 'notes', 'corrections', 'capture', 'inject', 'segments', 'persona', 'persona-tx', 'index']
 for (const key of BASE) assert.ok(keys.includes(key), '体检少了 ' + key + '：' + keys.join(','))
 assert.ok(keys.length === BASE.length || keys.length === BASE.length + 1, '体检项数不对：' + keys.join(','))
 if (keys.length === BASE.length + 1) assert.ok(keys.includes('index-failed'), '多出来的只能是 index-failed')
-assert.equal(keys[keys.length - 1], 'beat', '心跳永远排最后')
-console.log('52. state 带人格与纠偏，体检八项')
+// 非 ok 的每一条都得给得出能照着做的修法：只报「有问题」等于让人自己去翻代码
+for (const check of doctorDoc.checks) {
+  if (check.level === 'ok' || check.level === 'info') continue
+  assert.ok(String(check.fix || '').length > 0, check.key + ' 报了问题却没给修法')
+}
+assert.equal(doctorDoc.fixes.length, doctorDoc.checks.filter((check) => check.level === 'error' || check.level === 'warn').length, 'fixes 要跟问题数一一对上')
+// 七段结构要真的数到七段，而不是「看起来正常」
+const segCheck = doctorDoc.checks.find((check) => check.key === 'segments')
+assert.equal(segCheck.level, 'ok', '七段结构该正常：' + segCheck.detail)
+assert.match(segCheck.detail, /七段齐全/)
+// 版本号只有一个来源：package.json
+const pkgVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
+assert.equal(doctorDoc.version, pkgVersion, '体检报的版本必须等于 package.json')
+assert.equal(st.version, pkgVersion, 'state 报的版本必须等于 package.json')
+console.log('52. state 带人格与纠偏，体检六组十四项')
 
 /* 53. 人格跟着迁移包走：目标空就采用，两边都有且不同就落旁路文件 */
 {
