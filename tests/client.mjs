@@ -5,6 +5,7 @@
  */
 
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 let loaded = null
 
@@ -114,5 +115,14 @@ assert.match(inner.children.join(''), /读取中/)
 assert.doesNotMatch(inner.children.join(''), /重启 DSH/, '首帧不该先闪一句重启')
 console.log('2. 没有状态时先显示「读取中…」，不闪「重启 DSH」')
 
-console.log('\n2 项全部通过')
+/* ---------- 体检六组：默认收起 ---------- */
+
+// 收起是用户的手，不是程序的手：docOpenOf 不许按 level 自动展开任何一组。
+const clientSrc = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+const openFn = clientSrc.match(/var docOpenOf = function \(group\) \{[\s\S]*?\n      \}/)
+assert.ok(openFn, '找不到 docOpenOf，折叠逻辑被改动了')
+assert.doesNotMatch(openFn[0], /'warn'|'error'/, '体检六组默认全收起，不许按 level 自动展开')
+console.log('3. 体检六组默认收起，只有点开才展开')
+
+console.log('\n3 项全部通过')
 process.exit(0)
