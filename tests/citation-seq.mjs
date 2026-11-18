@@ -8,7 +8,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { zstdCompressSync } from 'node:zlib'
@@ -128,5 +128,25 @@ const staged = memory.stageFact({ text: '测试用：出处核回口径已统一
 assert.equal(staged.ok, true, '证据包的 index 必须能直接进 stageFact：' + staged.error)
 assert.equal(staged.fact.citation.index, 3)
 console.log('6. 证据包 index 能直接进候选事实，字段含义统一')
+
+/* 7. 旧缓存必须作废：缓存里没有 seq 时不能「文件没变就照用」 */
+const firstRead = memory.readSession(session)
+assert.equal(firstRead.records.some((record) => record.seq !== undefined), true)
+const cacheFile = join(memory.cacheDir(), session.id + '.json')
+if (existsSync(cacheFile)) {
+  const stale = JSON.parse(readFileSync(cacheFile, 'utf8'))
+  stale.v = 6
+  stale.records = stale.records.map(({ seq, ...rest }) => rest)
+  writeFileSync(cacheFile, JSON.stringify(stale))
+  const reread = memory.readSession(session)
+  assert.equal(
+    reread.records.every((record) => record.seq !== undefined),
+    true,
+    '旧版本缓存要重解析，不能把没有 seq 的记录继续当有效数据',
+  )
+  console.log('7. 旧版本缓存被作废，重新解析出 seq')
+} else {
+  console.log('7. 未落缓存文件，跳过（缓存目录未启用）')
+}
 
 console.log('\n全部通过：seq 与行号两套编号各归其位')
