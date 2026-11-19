@@ -45,3 +45,14 @@ test('rankTopics 新 topic（lastTouched 近）排老 topic 前', () => {
   const ranked = relation.rankTopics(topics, now)
   assert.equal(ranked[0].id, 'new', 'lastTouched 近的排前面')
 })
+
+test('空库时话题段给一句抽取引导（算进话题段 chars）', () => {
+  relation.writeTopics([])
+  const built = assembleInjection(currentConfig())
+  assert.match(built.text, /暂无/, '空库时注入应含「暂无」引导')
+  assert.match(built.text, /selfnote_extract/, '引导句应提示用 selfnote_extract 抽取')
+  const seg = built.segments.find((s) => s.key === 'topic')
+  assert.ok(seg.chars > 0, '引导句算进话题段 chars（不是 0）')
+  assert.ok(seg.chars <= 160, `引导句不超话题段预算，实际 ${seg.chars}`)
+  assert.equal(seg.kept.length, 0, '空库没有真实话题，kept 为空')
+})
