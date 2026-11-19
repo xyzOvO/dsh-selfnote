@@ -854,7 +854,7 @@ for (const group of doctorDoc.groups) {
 // 每一项都必须归进其中一组：漏推 group 的检查会在界面上凭空消失
 assert.equal(doctorDoc.checks.every((check) => GROUP_KEYS.includes(check.group)), true, '有检查项没归组')
 // 固定项一个不许少，也不许悄悄长出去
-const BASE = ['plugin', 'auth', 'beat', 'facts', 'habits', 'notes', 'corrections', 'capture', 'inject', 'segments', 'persona', 'persona-tx', 'index']
+const BASE = ['plugin', 'auth', 'beat', 'facts', 'habits', 'notes', 'corrections', 'capture', 'inject', 'segments', 'persona', 'persona-tx', 'index', 'relation']
 for (const key of BASE) assert.ok(keys.includes(key), '体检少了 ' + key + '：' + keys.join(','))
 assert.ok(keys.length === BASE.length || keys.length === BASE.length + 1, '体检项数不对：' + keys.join(','))
 if (keys.length === BASE.length + 1) assert.ok(keys.includes('index-failed'), '多出来的只能是 index-failed')
@@ -873,6 +873,37 @@ const pkgVersion = JSON.parse(readFileSync(new URL('../package.json', import.met
 assert.equal(doctorDoc.version, pkgVersion, '体检报的版本必须等于 package.json')
 assert.equal(st.version, pkgVersion, 'state 报的版本必须等于 package.json')
 console.log('52. state 带人格与纠偏，体检六组十四项')
+
+/* 52b. 关系对账：孤儿外键被抓出来，一致就放行 */
+{
+  const topicFile = join(dir, 'topic.jsonl')
+  const episodeFile = join(dir, 'episode.jsonl')
+  const factsBackup = existsSync(factsFile) ? readFileSync(factsFile, 'utf8') : ''
+  const now = '2026-11-19T00:00:00.000Z'
+  const day = '2026-11-19'
+  const line = (obj) => JSON.stringify(obj) + '\n'
+  try {
+    // 场景 1：episode 挂到不存在的 topic、fact 挂到不存在的 episode —— 两处孤儿都要报
+    writeFileSync(topicFile, line({ id: 't1', title: '孤儿测试', summary: 'x', boost: 0, lastTouched: now, useCount: 0, readCount: 0, created: day, updated: day }))
+    writeFileSync(episodeFile, line({ id: 'e1', topicId: 't-ghost', title: '议题', status: 'open', summary: '', lastTouched: now, nodes: [], created: day, updated: day }))
+    writeFileSync(factsFile, factsBackup + line({ id: 'f1', text: '孤儿挂靠', kind: 'rel', status: 'approved', episodeId: 'e-ghost', version: 1, created: day }))
+    const relWarn = (await call('GET', '/api/selfnote/doctor')).payload.checks.find((c) => c.key === 'relation')
+    assert.ok(relWarn, '缺 relation 对账项')
+    assert.equal(relWarn.level, 'warn', relWarn.detail)
+    assert.match(relWarn.detail, /孤儿/)
+    // 场景 2：全挂对 + nodes 与反查一致 —— 放行
+    writeFileSync(episodeFile, line({ id: 'e1', topicId: 't1', title: '议题', status: 'open', summary: '', lastTouched: now, nodes: ['f1'], created: day, updated: day }))
+    writeFileSync(factsFile, factsBackup + line({ id: 'f1', text: '孤儿挂靠', kind: 'rel', status: 'approved', episodeId: 'e1', version: 1, created: day }))
+    const relOk = (await call('GET', '/api/selfnote/doctor')).payload.checks.find((c) => c.key === 'relation')
+    assert.equal(relOk.level, 'ok', relOk.detail)
+    assert.match(relOk.detail, /外键一致/)
+    console.log('52b. 关系对账：孤儿外键被抓，一致放行')
+  } finally {
+    writeFileSync(topicFile, '')
+    writeFileSync(episodeFile, '')
+    writeFileSync(factsFile, factsBackup)
+  }
+}
 
 /* 53. 人格跟着迁移包走：目标空就采用，两边都有且不同就落旁路文件 */
 {
