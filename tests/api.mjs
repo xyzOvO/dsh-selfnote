@@ -905,6 +905,39 @@ console.log('52. state 带人格与纠偏，体检六组十四项')
   }
 }
 
+/* 52c. topics rename/archive 路由：改名、冲突拒绝、归档 */
+{
+  const { readTopics } = await import('../lib/relation.js')
+  const topicFile = join(dir, 'topic.jsonl')
+  const now = '2026-11-19T00:00:00.000Z'
+  const day = '2026-11-19'
+  const topicLine = (t) => JSON.stringify(t) + '\n'
+  writeFileSync(topicFile, [
+    topicLine({ id: 't-a', title: '旧名', summary: 'x', boost: 0, lastTouched: now, useCount: 0, readCount: 0, created: day, updated: day }),
+    topicLine({ id: 't-b', title: '另一个', summary: 'x', boost: 0, lastTouched: now, useCount: 0, readCount: 0, created: day, updated: day }),
+  ].join(''))
+
+  // rename 成功
+  r = await call('POST', '/api/selfnote/topics/rename', { id: 't-a', title: '新名' })
+  assert.equal(r.status, 200, JSON.stringify(r.payload))
+  assert.equal(r.payload.ok, true)
+  assert.equal(readTopics().find((t) => t.id === 't-a').title, '新名', '改名要落盘')
+
+  // rename 到已存在的 title → 冲突拒绝
+  r = await call('POST', '/api/selfnote/topics/rename', { id: 't-a', title: '另一个' })
+  assert.equal(r.status, 400, JSON.stringify(r.payload))
+  assert.equal(r.payload.ok, false)
+
+  // archive 成功：带 archivedAt
+  r = await call('POST', '/api/selfnote/topics/archive', { id: 't-a' })
+  assert.equal(r.status, 200, JSON.stringify(r.payload))
+  assert.equal(r.payload.ok, true)
+  assert.ok(readTopics().find((t) => t.id === 't-a').archivedAt, '归档要写 archivedAt')
+
+  writeFileSync(topicFile, '')
+  console.log('52c. topics rename/archive 路由：改名、冲突拒绝、归档')
+}
+
 /* 53. 人格跟着迁移包走：目标空就采用，两边都有且不同就落旁路文件 */
 {
   // 先把本机的人格清掉：目标为空时才谈得上「采用」
