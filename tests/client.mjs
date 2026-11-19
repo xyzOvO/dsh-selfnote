@@ -408,5 +408,29 @@ findButtons(st).filter(function (b) { return treeText(b).includes('去改') })[0
 assert.deepEqual(sSetters[17], { id: 'f1', text: '某结论全文写在这里' }, '记忆「去改」应进 factEdit')
 console.log('9. 页签内跳过提醒：显示/原因/截断/定位/范围都正常')
 
-console.log('\n9 项全部通过')
+/* ---------- 去改：滚动定位到下方编辑框 ---------- */
+const located = []
+globalThis.document.getElementById = function (id) {
+  return {
+    id,
+    scrollIntoView(opt) { located.push({ kind: 'scroll', id, opt }) },
+    classList: {
+      add(c) { located.push({ kind: 'add', id, c }) },
+      remove() {},
+    },
+  }
+}
+st = renderSettings(skippedState, 'notes')
+findButtons(st).filter(function (b) { return treeText(b).includes('去改') })[0].props.onClick()
+assert.ok(located.some(function (x) { return x.kind === 'scroll' && x.id === 'sn-note-0' }), '「去改」应滚动到下方那条自述')
+assert.ok(located.some(function (x) { return x.kind === 'add' && x.id === 'sn-note-0' }), '滚动后应短暂高亮那条')
+
+const memLocated = JSON.parse(JSON.stringify(skippedState))
+memLocated.injection.segments = [seg('facts', '结论', [{ preview: '某结论全文写在这里…', reason: 'scope' }])]
+st = renderSettings(memLocated, 'memory')
+findButtons(st).filter(function (b) { return treeText(b).includes('去改') })[0].props.onClick()
+assert.ok(located.some(function (x) { return x.kind === 'scroll' && x.id === 'sn-fact-f1' }), '记忆「去改」应滚动到对应那条')
+console.log('10. 「去改」滚动到下方编辑框并短暂高亮')
+
+console.log('\n10 项全部通过')
 process.exit(0)
