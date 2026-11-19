@@ -155,7 +155,10 @@ const mod = def.factory((id) => {
 let registered = null
 mod.apply({
   effect(fn) { fn() },
-  slots: { inject(name, fn) { fn() }, register(meta, C) { registered = C } },
+  slots: {
+    inject(name, fn) { fn() },
+    register(meta, C) { if (meta.name === 'settings.section') registered = C; return () => {} },
+  },
 })
 
 const wrapper = registered({})

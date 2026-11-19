@@ -57,38 +57,58 @@ assert.equal(loaded.id, 'dsh-selfnote')
 
 const mod = loaded.factory(require)
 assert.equal(mod.name, 'selfnote')
-assert.deepEqual(mod.inject, ['slots'])
+assert.deepEqual(mod.inject, ['slots', 'layout'])
 assert.equal(typeof mod.apply, 'function')
 
 /* ---------- apply：CSS + slot ---------- */
 
 let effectFn = null
 const registered = []
+const injected = {}
 const ctx = {
   effect(fn, label) {
     assert.match(label, /styles/)
     effectFn = fn
   },
+  layout: {
+    selectPanel() {},
+  },
   slots: {
     inject(name, fn) {
-      assert.equal(name, 'settings.section')
-      fn()
+      injected[name] = fn()
     },
     register(meta, Component) {
       registered.push({ meta, Component })
+      return () => {}
     },
   },
 }
 
 mod.apply(ctx)
 
-assert.equal(registered.length, 1)
-const slot = registered[0]
-assert.equal(slot.meta.name, 'settings.section')
+assert.equal(registered.length, 3)
+const slot = registered.find(function (item) { return item.meta.name === 'settings.section' })
+assert.ok(slot, '缺少 settings.section 注册')
 assert.equal(slot.meta.id, 'selfnote')
 assert.equal(slot.meta.order, 48)
 assert.equal(slot.meta.label(), '人格（自述）')
 assert.equal(typeof slot.Component, 'function')
+
+const sidebar = registered.find(function (item) { return item.meta.name === 'sidebar.panellist' })
+assert.ok(sidebar, '缺少 sidebar.panellist 注册')
+assert.equal(sidebar.meta.id, 'selfnote-memory-confirm')
+assert.equal(sidebar.meta.order, 10)
+assert.equal(sidebar.meta.label(), '记忆确认')
+assert.equal(typeof sidebar.Component, 'function')
+
+const main = registered.find(function (item) { return item.meta.name === 'main' })
+assert.ok(main, '缺少 main 注册')
+assert.equal(main.meta.key, 'selfnote-memory-confirm')
+assert.equal(main.meta.key, sidebar.meta.id)
+assert.equal(typeof main.Component, 'function')
+
+assert.equal(typeof injected['sidebar.panellist'], 'function', '侧栏注册的 disposer 未交还')
+assert.equal(typeof injected['main'], 'function', '主区面板注册的 disposer 未交还')
 
 /* ---------- CSS ---------- */
 
