@@ -24,9 +24,9 @@ const { apply } = await import('../lib/index.js')
 
 /* ---------------- 1. 解析 / 渲染 ---------------- */
 
-assert.deepEqual(store.parseNotes('- 2026-11-04 [核心] 我是谁'), [{ date: '2026-11-04', text: '我是谁', tier: 'core', pin: false }])
-assert.deepEqual(store.parseNotes('- 2026-11-04 [稳定*] 别喊我肥鱼'), [{ date: '2026-11-04', text: '别喊我肥鱼', tier: 'stable', pin: true }])
-assert.deepEqual(store.parseNotes('- [临时] 今晚早睡'), [{ date: '', text: '今晚早睡', tier: 'temp', pin: false }])
+assert.deepEqual(store.parseNotes('- 2026-11-04 [核心] 我是谁'), [{ date: '2026-11-04', text: '我是谁', tier: 'core', pin: false, key: '' }])
+assert.deepEqual(store.parseNotes('- 2026-11-04 [稳定*] 别喊我肥鱼'), [{ date: '2026-11-04', text: '别喊我肥鱼', tier: 'stable', pin: true, key: '' }])
+assert.deepEqual(store.parseNotes('- [临时] 今晚早睡'), [{ date: '', text: '今晚早睡', tier: 'temp', pin: false, key: '' }])
 // 老文件（没标记）= 稳定，零迁移
 assert.equal(store.parseNotes('- 2026-11-04 普通一句')[0].tier, 'stable')
 assert.equal(store.parseNotes('- 2026-11-04 普通一句')[0].pin, false)

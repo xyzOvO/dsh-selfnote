@@ -619,7 +619,7 @@ const withSkippedDetail = {
 }
 tree = render(withSkippedDetail)
 json = JSON.stringify(tree)
-assert.ok(json.includes('八段只算记忆本身的字数'), '旧「四段」文案要改成八段')
+assert.ok(json.includes('九段只算记忆本身的字数'), '旧「四段」文案要改成九段')
 assert.ok(json.includes('details') || json.includes('summary'), '跳过原因要折叠展示')
 assert.ok(json.includes('素材层，不注入'), 'core 不能只被标成「预算不足」')
 assert.ok(json.includes('已过期') && json.includes('预算不足'), 'reason 要有中文标签')

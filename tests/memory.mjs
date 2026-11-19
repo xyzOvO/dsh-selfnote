@@ -15,6 +15,7 @@ const cache = join(root, 'memory')
 
 process.env.DSH_SESSIONS_DIR = sessions
 process.env.DSH_MEMORY_DIR = cache
+process.env.DSH_SELFNOTE_DIR = join(root, 'selfnote')
 
 const memory = await import('../lib/memory.js')
 

@@ -11,6 +11,7 @@ import { join } from 'node:path'
 
 const root = mkdtempSync(join(tmpdir(), 'selfnote-perf-writes-'))
 process.env.DSH_MEMORY_DIR = join(root, 'memory')
+process.env.DSH_SELFNOTE_DIR = join(root, 'selfnote')
 mkdirSync(process.env.DSH_MEMORY_DIR, { recursive: true })
 
 const { writeAtomic } = await import('../lib/atomic.js')

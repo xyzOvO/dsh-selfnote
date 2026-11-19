@@ -11,6 +11,7 @@ import { zstdCompressSync } from 'node:zlib'
 const realSessions = join(process.env.USERPROFILE ?? process.env.HOME, '.dsh', 'sessions')
 const root = mkdtempSync(join(tmpdir(), 'selfnote-perf-incr-'))
 process.env.DSH_MEMORY_DIR = join(root, 'memory')
+process.env.DSH_SELFNOTE_DIR = join(root, 'selfnote')
 process.env.DSH_SESSIONS_DIR = join(root, 'sessions')
 
 const memory = await import('../lib/memory.js')

@@ -350,9 +350,9 @@ console.log('24. 有会话解不开时报失败，不伪装成功')
 r = await call('GET', '/api/selfnote/state')
 const inj = r.payload.injection
 assert.ok(inj && typeof inj === 'object', 'state 里要有 injection')
-assert.equal(inj.limit, 1160)
-assert.deepEqual(inj.segments.map((seg) => seg.key), ['persona', 'notes', 'guide', 'profile', 'env', 'topic', 'facts', 'habits'])
-assert.deepEqual(inj.segments.map((seg) => seg.label), ['人格', '自述', '写自述的时机', '画像', '环境', '话题', '结论', '习惯'])
+assert.equal(inj.limit, 1320)
+assert.deepEqual(inj.segments.map((seg) => seg.key), ['persona', 'notes', 'preset', 'guide', 'profile', 'env', 'topic', 'facts', 'habits'])
+assert.deepEqual(inj.segments.map((seg) => seg.label), ['人格', '自述', '协作默认', '写自述的时机', '画像', '环境', '话题', '结论', '习惯'])
 assert.equal(inj.chars, inj.text.length, '字数要等于原文长度，别各算各的')
 const segSum = inj.segments.reduce((n, seg) => n + seg.chars, 0)
 assert.equal(segSum + inj.overhead, inj.chars, '四段字数 + 框架文字（标题/边界句/画像抬头）= 总字数')
@@ -864,10 +864,10 @@ for (const check of doctorDoc.checks) {
   assert.ok(String(check.fix || '').length > 0, check.key + ' 报了问题却没给修法')
 }
 assert.equal(doctorDoc.fixes.length, doctorDoc.checks.filter((check) => check.level === 'error' || check.level === 'warn').length, 'fixes 要跟问题数一一对上')
-// 八段结构要真的数到八段，而不是「看起来正常」
+// 九段结构要真的数到九段，而不是「看起来正常」
 const segCheck = doctorDoc.checks.find((check) => check.key === 'segments')
-assert.equal(segCheck.level, 'ok', '八段结构该正常：' + segCheck.detail)
-assert.match(segCheck.detail, /八段齐全/)
+assert.equal(segCheck.level, 'ok', '九段结构该正常：' + segCheck.detail)
+assert.match(segCheck.detail, /九段齐全/)
 // 版本号只有一个来源：package.json
 const pkgVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
 assert.equal(doctorDoc.version, pkgVersion, '体检报的版本必须等于 package.json')
@@ -897,7 +897,14 @@ console.log('52. state 带人格与纠偏，体检六组十四项')
     const relOk = (await call('GET', '/api/selfnote/doctor')).payload.checks.find((c) => c.key === 'relation')
     assert.equal(relOk.level, 'ok', relOk.detail)
     assert.match(relOk.detail, /外键一致/)
-    console.log('52b. 关系对账：孤儿外键被抓，一致放行')
+    // 场景 3：nodes 与事实反查不一致 —— 按事实重建后放行，修了几个要说出来
+    writeFileSync(episodeFile, line({ id: 'e1', topicId: 't1', title: '议题', status: 'open', summary: '', lastTouched: now, nodes: [], created: day, updated: day }))
+    const relHeal = (await call('GET', '/api/selfnote/doctor')).payload.checks.find((c) => c.key === 'relation')
+    assert.equal(relHeal.level, 'ok', relHeal.detail)
+    assert.match(relHeal.detail, /重建了 1 个 episode 的 nodes/)
+    const healed = JSON.parse(readFileSync(episodeFile, 'utf8').trim().split('\n')[0])
+    assert.deepEqual(healed.nodes, ['f1'], '重建结果要落盘，不能只在内存里对')
+    console.log('52b-2. 关系对账：nodes 不一致时按事实重建并落盘')
   } finally {
     writeFileSync(topicFile, '')
     writeFileSync(episodeFile, '')

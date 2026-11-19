@@ -17,6 +17,7 @@ const realSessions = join(home, '.dsh', 'sessions')
 
 const work = mkdtempSync(join(tmpdir(), 'selfnote-perf-'))
 process.env.DSH_MEMORY_DIR = join(work, 'memory')
+process.env.DSH_SELFNOTE_DIR = join(work, 'selfnote')
 process.env.DSH_SESSIONS_DIR = realSessions
 try {
   cpSync(realMemory, process.env.DSH_MEMORY_DIR, { recursive: true })

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 const home = homedir()
 const work = mkdtempSync(join(tmpdir(), 'prof-'))
 process.env.DSH_MEMORY_DIR = join(work, 'memory')
+process.env.DSH_SELFNOTE_DIR = join(work, 'selfnote')
 process.env.DSH_SESSIONS_DIR = join(home, '.dsh', 'sessions')
 cpSync(join(home, '.dsh', 'memory'), process.env.DSH_MEMORY_DIR, { recursive: true })
 const mem = await import('../lib/memory.js')

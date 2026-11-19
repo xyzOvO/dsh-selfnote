@@ -10,6 +10,7 @@ import { join } from 'node:path'
 
 const dir = mkdtempSync(join(tmpdir(), 'selfnote-tx-'))
 process.env.DSH_MEMORY_DIR = join(dir, 'memory')
+process.env.DSH_SELFNOTE_DIR = join(dir, 'selfnote')
 
 const { mutateFacts, readFacts, writeFacts, touchFacts, setFactStatus } = await import('../lib/memory.js')
 

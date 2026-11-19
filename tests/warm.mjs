@@ -9,6 +9,7 @@ import { join } from 'node:path'
 
 const dir = mkdtempSync(join(tmpdir(), 'selfnote-warm-'))
 process.env.DSH_MEMORY_DIR = join(dir, 'memory')
+process.env.DSH_SELFNOTE_DIR = join(dir, 'selfnote')
 process.env.DSH_SESSIONS_DIR = join(dir, 'sessions')
 
 const { writeSummary, voidSummary, searchWarm, warmStats, warmPath, readWarm } = await import('../lib/warm.js')
