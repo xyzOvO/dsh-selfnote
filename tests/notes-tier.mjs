@@ -64,6 +64,13 @@ console.log('2. 类型随写入落盘，改正文保留原类型')
 /* ---------------- 3. 注入顺序 ---------------- */
 
 const pad = (n) => 'x'.repeat(n)
+
+const ago = (days) => {
+  const d = new Date(Date.now() - days * 86400000)
+  const pad2 = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+
 const boot = (extra) => {
   const captured = { contexts: [] }
   apply(
@@ -94,7 +101,7 @@ const ordered = shot([
   { date: '2026-11-03', text: 'STABLE-OLD' + pad(10), tier: 'stable', pin: false },
   { date: '2026-11-04', text: 'STABLE-PIN' + pad(10), tier: 'stable', pin: true },
   { date: '2026-11-05', text: 'STABLE-NEW' + pad(10), tier: 'stable', pin: false },
-  { date: '2026-11-06', text: 'TEMP1' + pad(10), tier: 'temp', pin: false },
+  { date: ago(1), text: 'TEMP1' + pad(10), tier: 'temp', pin: false },
 ])
 const at = (marker) => ordered.indexOf(marker)
 assert.ok(!ordered.includes('CORE1') && !ordered.includes('CORE2'), '核心不再进注入：' + JSON.stringify(ordered))
@@ -134,7 +141,7 @@ console.log('4. 核心不占注入预算，稳定的位一点不动')
 
 const stableHeavy = shot([
   ...Array.from({ length: 5 }, (_, i) => ({ date: '2026-11-1' + i, text: 'ST' + i + pad(40), tier: 'stable', pin: false })),
-  { date: '2026-11-20', text: 'TEMP-KEEP' + pad(8), tier: 'temp', pin: false },
+  { date: ago(1), text: 'TEMP-KEEP' + pad(8), tier: 'temp', pin: false },
 ])
 assert.ok(stableHeavy.includes('TEMP-KEEP'), '临时段有 1/4 保底：' + JSON.stringify(stableHeavy))
 assert.ok(stableHeavy.includes('另有'), '稳定段被挤掉时同样有门牌')
@@ -147,12 +154,6 @@ assert.ok(!roomy.includes('另有'), '没有条目被挤掉就不该有门牌：
 console.log('6. 没东西被挤掉时不出门牌')
 
 /* ---------------- 7. 临时自述会过期：不再自动进场，但内容不丢 ---------------- */
-
-const ago = (days) => {
-  const d = new Date(Date.now() - days * 86400000)
-  const pad2 = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
-}
 
 const ttlShot = shot([
   { date: ago(60), text: 'CORE-OLD' + pad(5), tier: 'core', pin: false },
