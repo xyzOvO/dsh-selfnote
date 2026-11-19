@@ -25,15 +25,15 @@ const st = (await f.state()).payload
 assert.equal(st.injection.overhead, overheadBaseline, '人格单关时 overhead 必须与改前完全一致')
 console.log('1. 注入文本与 overhead 双基线保持')
 
-/* 2. 启用时恒 7 段；personaEnabled:false 补零值段 */
-assert.equal(st.injection.segments.length, 7)
+/* 2. 启用时恒 8 段；personaEnabled:false 补零值段 */
+assert.equal(st.injection.segments.length, 8)
 assert.deepEqual(st.injection.segments.map((s) => s.key),
-  ['persona', 'notes', 'guide', 'profile', 'env', 'facts', 'habits'])
+  ['persona', 'notes', 'guide', 'profile', 'env', 'topic', 'facts', 'habits'])
 assert.equal(st.injection.segments[0].chars, 0, 'personaEnabled:false 时人格段是零值')
 assert.deepEqual(st.injection.segments[0].skippedDetail, [])
-assert.ok(st.injection.segments.every((s) => Array.isArray(s.skippedDetail)), '7 段都要显式给 skippedDetail')
+assert.ok(st.injection.segments.every((s) => Array.isArray(s.skippedDetail)), '8 段都要显式给 skippedDetail')
 assert.ok(st.injection.segments.every((s) => s.skippedDetail.every((d) => SKIP_REASONS.includes(d.reason))))
-console.log('2. 7 段全带 skippedDetail，reason 都在封闭枚举内')
+console.log('2. 8 段全带 skippedDetail，reason 都在封闭枚举内')
 
 /* 3. notes 段闭合 + P1 同文跨型 + P3 重复 ID */
 const notesSeg = st.injection.segments.find((s) => s.key === 'notes')

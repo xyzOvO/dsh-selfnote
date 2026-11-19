@@ -350,9 +350,9 @@ console.log('24. 有会话解不开时报失败，不伪装成功')
 r = await call('GET', '/api/selfnote/state')
 const inj = r.payload.injection
 assert.ok(inj && typeof inj === 'object', 'state 里要有 injection')
-assert.equal(inj.limit, 1000)
-assert.deepEqual(inj.segments.map((seg) => seg.key), ['persona', 'notes', 'guide', 'profile', 'env', 'facts', 'habits'])
-assert.deepEqual(inj.segments.map((seg) => seg.label), ['人格', '自述', '写自述的时机', '画像', '环境', '结论', '习惯'])
+assert.equal(inj.limit, 1160)
+assert.deepEqual(inj.segments.map((seg) => seg.key), ['persona', 'notes', 'guide', 'profile', 'env', 'topic', 'facts', 'habits'])
+assert.deepEqual(inj.segments.map((seg) => seg.label), ['人格', '自述', '写自述的时机', '画像', '环境', '话题', '结论', '习惯'])
 assert.equal(inj.chars, inj.text.length, '字数要等于原文长度，别各算各的')
 const segSum = inj.segments.reduce((n, seg) => n + seg.chars, 0)
 assert.equal(segSum + inj.overhead, inj.chars, '四段字数 + 框架文字（标题/边界句/画像抬头）= 总字数')
@@ -864,10 +864,10 @@ for (const check of doctorDoc.checks) {
   assert.ok(String(check.fix || '').length > 0, check.key + ' 报了问题却没给修法')
 }
 assert.equal(doctorDoc.fixes.length, doctorDoc.checks.filter((check) => check.level === 'error' || check.level === 'warn').length, 'fixes 要跟问题数一一对上')
-// 七段结构要真的数到七段，而不是「看起来正常」
+// 八段结构要真的数到八段，而不是「看起来正常」
 const segCheck = doctorDoc.checks.find((check) => check.key === 'segments')
-assert.equal(segCheck.level, 'ok', '七段结构该正常：' + segCheck.detail)
-assert.match(segCheck.detail, /七段齐全/)
+assert.equal(segCheck.level, 'ok', '八段结构该正常：' + segCheck.detail)
+assert.match(segCheck.detail, /八段齐全/)
 // 版本号只有一个来源：package.json
 const pkgVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
 assert.equal(doctorDoc.version, pkgVersion, '体检报的版本必须等于 package.json')

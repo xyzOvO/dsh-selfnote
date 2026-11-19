@@ -115,10 +115,10 @@ const envSeg = r.payload.injection.segments.find((seg) => seg.key === 'env')
 assert.ok(envSeg.skipped.length > 0, '这组数据本来就该放不下')
 assert.match(r.payload.injection.text, /另有 \d+ 条环境备忘/, '真注入里要有门牌')
 assert.equal(r.payload.budget.env, envSeg.chars, 'budget.env 要算上门牌收敛后的真实字数')
-const budgetSum = ['persona', 'notes', 'profile', 'env', 'facts', 'habits'].reduce((sum, key) => sum + Number(r.payload.budget[key]), 0)
-assert.equal(r.payload.budget.total, budgetSum, 'total 必须等于六段之和')
+const budgetSum = ['persona', 'notes', 'profile', 'env', 'topics', 'facts', 'habits'].reduce((sum, key) => sum + Number(r.payload.budget[key]), 0)
+assert.equal(r.payload.budget.total, budgetSum, 'total 必须等于七段之和')
 assert.ok(r.payload.budget.total <= r.payload.budget.limit, 'total 不能突破总预算')
-ok('env 门牌收敛进预算账，total 与六段之和闭合')
+ok('env 门牌收敛进预算账，total 与七段之和闭合')
 
 /* 4. 索引坏了不能吞掉线性 recall：应标记降级并仍返回 raw 命中 */
 const sessionDir = join(process.env.DSH_SESSIONS_DIR, 'proj', 'session-aaa')
