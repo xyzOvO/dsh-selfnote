@@ -938,6 +938,40 @@ console.log('52. state 带人格与纠偏，体检六组十四项')
   console.log('52c. topics rename/archive 路由：改名、冲突拒绝、归档')
 }
 
+/* 52d. state 带 relations 列表 + boost 路由 */
+{
+  const { readTopics } = await import('../lib/relation.js')
+  const topicFile = join(dir, 'topic.jsonl')
+  const now = '2026-11-19T00:00:00.000Z'
+  const day = '2026-11-19'
+  const topicLine = (t) => JSON.stringify(t) + '\n'
+  writeFileSync(topicFile, topicLine({ id: 't-a', title: '关系测试', summary: 'x', boost: 0, lastTouched: now, useCount: 3, readCount: 1, created: day, updated: day }))
+
+  // state 要带 relations 列表（前端关系记忆卡用）
+  r = await call('GET', '/api/selfnote/state')
+  assert.ok(r.payload.relations, 'state 里要有 relations')
+  assert.ok(Array.isArray(r.payload.relations.topics), 'relations.topics 是数组')
+  assert.ok(Array.isArray(r.payload.relations.episodes), 'relations.episodes 是数组')
+  assert.equal(r.payload.relations.topics.find((t) => t.id === 't-a').title, '关系测试', 'relations.topics 要带话题')
+
+  // boost 路由：加权重，不碰 useCount/readCount
+  r = await call('POST', '/api/selfnote/topics/boost', { id: 't-a', delta: 2 })
+  assert.equal(r.status, 200, JSON.stringify(r.payload))
+  assert.equal(r.payload.ok, true)
+  const boosted = readTopics().find((t) => t.id === 't-a')
+  assert.equal(boosted.boost, 2, 'boost 要落盘')
+  assert.equal(boosted.useCount, 3, 'boost 不碰 useCount')
+  assert.equal(boosted.readCount, 1, 'boost 不碰 readCount')
+
+  // boost 到不存在的 id → 400
+  r = await call('POST', '/api/selfnote/topics/boost', { id: 't-ghost', delta: 1 })
+  assert.equal(r.status, 400, JSON.stringify(r.payload))
+  assert.equal(r.payload.ok, false)
+
+  writeFileSync(topicFile, '')
+  console.log('52d. state 带 relations + boost 路由')
+}
+
 /* 53. 人格跟着迁移包走：目标空就采用，两边都有且不同就落旁路文件 */
 {
   // 先把本机的人格清掉：目标为空时才谈得上「采用」
