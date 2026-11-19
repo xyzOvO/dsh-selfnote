@@ -320,5 +320,93 @@ assert.ok(treeText(rerender()).includes('没改成'), '写失败要有提示，�
 assert.ok(!treeText(rerender()).includes('已记住'), '写失败不该出现成功提示')
 console.log('8. 写失败显示失败提示，不假装成功')
 
-console.log('\n8 项全部通过')
+/* ---------- 页签内跳过提醒 ---------- */
+let sState, sTab, sIdx, sSetters
+const ReactSettings = {
+  createElement,
+  useState(initial) {
+    const i = sIdx++
+    if (i === 0) return [sState, () => {}]
+    if (i === 8) return [sTab, () => {}]
+    if (i === 9) return [true, () => {}]
+    return [typeof initial === 'function' ? initial() : initial,
+            function (v) { sSetters[i] = v }]
+  },
+  useEffect() {},
+  useCallback(fn) { return fn },
+}
+const registeredSettings = []
+const modSettings = loaded.factory((id) => {
+  if (id === 'react') return ReactSettings
+  throw new Error('未知模块：' + id)
+})
+modSettings.apply({
+  effect() {}, layout: { selectPanel() {} },
+  slots: { inject(name, fn) { fn() },
+           register(meta, C) { registeredSettings.push({ meta, Component: C }); return () => {} } },
+})
+const SettingsComp = registeredSettings.find(function (r) { return r.meta.name === 'settings.section' }).Component
+function renderSettings(state, tab) {
+  sState = state; sTab = tab; sIdx = 0; sSetters = {}
+  const wrapper = SettingsComp({})
+  return wrapper.type(wrapper.props)
+}
+function seg(key, label, items, legacy) {
+  return { key, label, chars: 10, limit: 100,
+           skippedDetail: legacy ? undefined : items,
+           skipped: legacy ? items.map(function (i) { return typeof i === 'string' ? i : i.text }) : undefined }
+}
+const skippedState = {
+  injection: { chars: 10, limit: 1000, segments: [
+    seg('notes', '自述', [{ preview: '长自述文本…', reason: 'budget' }]),
+    seg('facts', '结论', [{ preview: '某结论…', reason: 'scope' }]),
+    seg('persona', '人格', [{ preview: '某人格行…', reason: 'budget' }]),
+    seg('profile', '画像', [{ preview: '某画像行…', reason: 'duplicate' }]),
+    seg('preset', '协作默认', [{ preview: '不该出现…', reason: 'budget' }]),
+  ] },
+  notes: [{ text: '长自述文本全文写在这里', tier: 'stable', date: '2026-01-01' }],
+  facts: { candidates: [], approved: [{ id: 'f1', text: '某结论全文写在这里', status: 'approved' }] },
+  persona: {}, profile: {}, attribution: {},
+}
+let st = renderSettings(skippedState, 'notes')
+assert.ok(treeText(st).includes('本页有 1 条没进注入'), 'notes 页签缺提醒卡')
+assert.ok(treeText(st).includes('预算不足'), '原因标签缺失')
+assert.ok(treeText(st).includes('长自述文本…'), '预览缺失')
+const goBtns = findButtons(st).filter(function (b) { return treeText(b).includes('去改') })
+assert.equal(goBtns.length, 1, '命中应有「去改」')
+goBtns[0].props.onClick()
+assert.equal(sSetters[14], 0, '「去改」应把第 0 条自述切进编辑态')
+
+const noSkip = JSON.parse(JSON.stringify(skippedState))
+noSkip.injection.segments = []
+st = renderSettings(noSkip, 'notes')
+assert.ok(!treeText(st).includes('本页有'), '无跳过项不该显示卡片')
+
+const legacy = JSON.parse(JSON.stringify(skippedState))
+legacy.injection.segments = [seg('notes', '自述', ['旧格式文本'], true)]
+st = renderSettings(legacy, 'notes')
+assert.ok(treeText(st).includes('旧格式文本') && treeText(st).includes('未说明'), '旧格式应显示未说明')
+
+const many = JSON.parse(JSON.stringify(skippedState))
+many.injection.segments = [seg('notes', '自述', Array.from({ length: 8 }, function (_, i) {
+  return { preview: '条目' + i, reason: 'budget' }
+}))]
+st = renderSettings(many, 'notes')
+assert.ok(treeText(st).includes('还有 2 条'), '超 6 条要提示剩余')
+assert.equal(findButtons(st).filter(function (b) { return treeText(b).includes('去改') }).length, 0, '模糊预览匹配不到不该给按钮')
+
+st = renderSettings(skippedState, 'persona')
+assert.ok(treeText(st).includes('某人格行…'), '人格页签缺提醒卡')
+assert.equal(findButtons(st).filter(function (b) { return treeText(b).includes('去改') }).length, 0, '人格不该给定位按钮')
+st = renderSettings(skippedState, 'memory')
+assert.ok(!treeText(st).includes('不该出现…'), 'preset 跳过项不该出现在设置页签')
+
+const memState = JSON.parse(JSON.stringify(skippedState))
+memState.injection.segments = [seg('facts', '结论', [{ preview: '某结论全文写在这里…', reason: 'scope' }])]
+st = renderSettings(memState, 'memory')
+findButtons(st).filter(function (b) { return treeText(b).includes('去改') })[0].props.onClick()
+assert.deepEqual(sSetters[17], { id: 'f1', text: '某结论全文写在这里' }, '记忆「去改」应进 factEdit')
+console.log('9. 页签内跳过提醒：显示/原因/截断/定位/范围都正常')
+
+console.log('\n9 项全部通过')
 process.exit(0)
