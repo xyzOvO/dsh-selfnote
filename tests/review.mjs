@@ -44,6 +44,17 @@ function userMessage(seq, time, text) {
   }
 }
 
+function assistantMessage(seq, time, text) {
+  return {
+    type: 'assistant/message',
+    seq,
+    time,
+    data: {
+      message: { content: [{ type: 'text', text }] },
+    },
+  }
+}
+
 function writeSession(id, records) {
   const folder = join(sessionsDir, 'demo', id)
   mkdirSync(folder, { recursive: true })
@@ -74,6 +85,19 @@ writeSession('s2', [userMessage(0, Date.parse(AT) + 2000, '先 dry-run，命中�
 writeSession('s3', [userMessage(0, Date.parse(AT) + 3000, '这套先 dry-run 再落盘的步骤记一下')])
 writeSession('s4', [userMessage(0, Date.parse(AT) + 4000, '以后别自动改配置文件')])
 
+const s5Pasted = '[Important] 文件:12 — 问题'
+const s6Quote = '这段是助手自己的转述'
+writeSession('s5', [userMessage(0, Date.parse(AT) + 5000, s5Pasted)])
+writeSession('s6', [assistantMessage(0, Date.parse(AT) + 7000, s6Quote)])
+writeSession('s8', [
+  {
+    type: 'subagent/descriptor',
+    data: { id: 'delegated-demo' },
+  },
+  userMessage(0, Date.parse(AT) + 9000, '这段是委派会话里的任务书'),
+])
+writeSession('s7', [userMessage(0, Date.parse(AT) + 8000, '这条引文与正文对不上')])
+
 const events = [
   evidenceEvent('e1', 's1', 0, '批量改文件名前先 dry-run 把命中数打出来，别直接 rename'),
   evidenceEvent('e2', 's2', 0, '先 dry-run，命中数不对就停'),
@@ -82,6 +106,11 @@ const events = [
   evidenceEvent('e5', 's2', 0, '这条已经处理过，不该再进证据包', { used: true }),
   evidenceEvent('e6', 'missing', 0, '找不到会话的孤证'),
   evidenceEvent('e7', 's4', 0, '以后别自动改配置文件'),
+  evidenceEvent('e8', 's5', 0, s5Pasted),
+  evidenceEvent('e9', 's8', 0, '这段是委派会话里的任务书'),
+  evidenceEvent('e10', 's6', 0, s6Quote),
+  evidenceEvent('e11', 's7', 0, '这条引文与原文对不上，不该进证据包'),
+  evidenceEvent('e12', 's1', 0, ''),
 ]
 corrections.writeEvents(events)
 
@@ -93,22 +122,46 @@ assert.equal(review.skillDraftDir(), join(dir, 'review', 'skill-drafts'))
 assert.equal(existsSync(join(dir, 'notes.md')), false, '复盘模块不许碰自述文件')
 console.log('1. review 四类产物分目录，且没有碰自述')
 
+/* 2a. 来源判据：本人原话、助手/委派转述、粘贴外部文本分开 */
+assert.equal(review.provenanceOf({ role: 'user', text: '我说过要用中文' }), 'own')
+assert.equal(review.provenanceOf({ role: 'assistant', text: '我说过要用中文' }), 'quoted')
+assert.equal(review.provenanceOf({ role: 'delegated', text: '我说过要用中文' }), 'quoted')
+assert.equal(review.provenanceOf({ role: 'user', text: s5Pasted }), 'pasted')
+assert.equal(review.provenanceOf({ role: 'user', text: '```\nconst x = 1\n```' }), 'pasted')
+assert.equal(review.provenanceOf({ role: 'user', text: '> 这是引用块' }), 'pasted')
+assert.equal(review.provenanceOf({ role: 'user', text: '复审：这里要改' }), 'pasted')
+console.log('2a. 来源判据区分本人原话、转述与粘贴文本')
+
 /* 2. 证据包：核回原文、跳过孤证与已处理证据、去重，不复制整份会话 */
 const collected = review.collectEvidence({ now: new Date(AT) })
 assert.equal(collected.ok, true)
-assert.equal(collected.scanned, 7)
-assert.equal(collected.evidence.length, 4, 'e1/e2/e3/e7 有效，e4 重复、e5 已用、e6 找不到会话')
+assert.equal(collected.scanned, 12)
+assert.equal(collected.evidence.length, 7, 'e1/e2/e3/e7/e8/e9/e10 有效，e4 重复、e5 已用、e6/e11/e12 被拒')
 assert.equal(collected.duplicate, 1)
-assert.equal(collected.rejected.length, 1)
-assert.equal(collected.rejected[0].id, 'e6')
+assert.equal(collected.rejected.length, 3)
+const rejectedIds = collected.rejected.map((item) => item.id)
+assert.ok(rejectedIds.includes('e6'), '找不到会话的孤证要进 rejected')
+assert.ok(rejectedIds.includes('e11'), '引文与正文对不上要进 rejected')
+assert.ok(rejectedIds.includes('e12'), '空引文要进 rejected 且不抛')
 assert.equal(collected.evidence[0].sessionId, 's1')
 assert.equal(collected.evidence[0].index, 0)
 assert.match(collected.evidence[0].quote, /dry-run/)
 assert.equal(collected.evidence[0].date, '2026-11-14')
+const provenanceBySession = Object.fromEntries(
+  collected.evidence.map((item) => [item.sessionId, item.provenance]),
+)
+assert.equal(provenanceBySession.s1, 'own')
+assert.equal(provenanceBySession.s6, 'quoted', '助手自己的话判 quoted')
+assert.equal(collected.evidence.find((item) => item.quote === s5Pasted).provenance, 'pasted')
+assert.equal(
+  collected.evidence.find((item) => item.quote === '这段是委派会话里的任务书').provenance,
+  'quoted',
+  '委派会话里的 user 判 quoted',
+)
 assert.ok(existsSync(collected.path), 'collectEvidence 要真的落一份证据包')
 const evidenceText = readFileSync(collected.path, 'utf8')
 assert.equal(evidenceText.includes(MARKER), false, '证据包不许复制整份会话')
-assert.equal(corrections.readEvents().length, 7, '收集证据不该删/改原始纠偏记录')
+assert.equal(corrections.readEvents().length, 12, '收集证据不该删/改原始纠偏记录')
 console.log('2. 证据包核回原文、去重、跳过孤证，不复制整份会话')
 
 /* 3. 风险分级：操作路径 / 行为准则 / 权限边界能分开 */
@@ -129,8 +182,8 @@ const dryEvidence = collected.evidence.filter((item) => /dry-run/.test(item.quot
 const lone = collected.evidence.filter((item) => /别自动改配置文件/.test(item.quote)).slice(0, 1)
 const lonePlan = review.proposeCandidates({
   items: [
-    { text: '以后别自动改配置文件', risk: 'behavior', target: 'review-only', evidence: lone, boundary: true },
-    { text: '对外发布前必须人工点头', risk: 'permission', target: 'review-only', evidence: lone, boundary: true },
+    { text: '以后别自动改配置文件', risk: 'behavior', target: 'review-only', evidence: lone },
+    { text: '对外发布前必须人工点头', risk: 'permission', target: 'review-only', evidence: lone },
   ],
   now: new Date(AT),
 })
