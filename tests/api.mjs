@@ -53,6 +53,13 @@ assert.ok(handler, '没有注册 /api/selfnote 路由')
 const toolNames = toolHold.map((tool) => tool.name)
 assert.deepEqual(toolNames, ['self_note', 'memory_recall', 'memory_stage', 'memory_search', 'memory_write', 'selfnote_review', 'selfnote_extract'])
 assert.equal(toolHold[0].output.render({}, { action: 'stats', entries: 0, chars: 0, maxChars: 1, maxEntries: 1, archiveFiles: 0 })[0].type, 'text')
+// 批2-1：self_note schema 要声明 corrections 翻页实际读取的 cursor/limit
+assert.equal(toolHold[0].parameters.properties.cursor.type, 'string')
+assert.match(toolHold[0].parameters.properties.cursor.description, /corrections/)
+assert.equal(toolHold[0].parameters.properties.limit.type, 'number')
+assert.match(toolHold[0].parameters.properties.limit.description, /corrections/)
+// 批2 复审：episodes.status 的合法值要在 schema 里写明，别让非法值静默回落还没提示
+assert.deepEqual(toolHold[6].parameters.properties.episodes.items.properties.status.enum, ['open', 'closed', 'archived'])
 assert.equal(toolHold[1].output.render({}, { query: 'x', raw: { total: 0 } })[0].type, 'text')
 
 function call(method, url, body, headers) {
@@ -1066,6 +1073,24 @@ rp = await call('POST', '/api/selfnote/config', { halfLifeDays: 30, profileMaxCh
 assert.equal(rp.status, 200)
 console.log('56. 半衰期/画像上限/纠偏游标都在 state 里，越界被拒')
 
-console.log('\n56 项全部通过（data dir: ' + dir + '）')
+/* 57. 批2-6：命中话题记了 readCount，就得把话题正文渲染出来（门牌「memory_recall 查」不能骗人） */
+{
+  const hitTopics = [
+    { id: 't-kb', title: '知识库搭建', summary: '在搭本地知识库' },
+    { id: 'e-kb', title: '检索架构', summary: '知识库检索怎么做', status: 'open' },
+  ]
+  const recallTool = toolHold.find((tool) => tool.name === 'memory_recall')
+  const searchTool = toolHold.find((tool) => tool.name === 'memory_search')
+  const recallRender = recallTool.output.render({ query: '知识库' }, { query: '知识库', topics: hitTopics, raw: { total: 0, sessions_scanned: 0, sessions_total: 0 } }).map((b) => b.text).join('\n')
+  assert.match(recallRender, /知识库搭建/, 'memory_recall 渲染要带命中话题标题')
+  assert.match(recallRender, /在搭本地知识库/, 'memory_recall 渲染要带命中话题摘要')
+  const searchRender = searchTool.output.render({ query: '知识库' }, { query: '知识库', topics: hitTopics, total: 0, hits: [] }).map((b) => b.text).join('\n')
+  assert.match(searchRender, /知识库搭建/, 'memory_search 渲染要带命中话题标题')
+  assert.match(searchRender, /在搭本地知识库/, 'memory_search 渲染要带命中话题摘要')
+  assert.ok(!searchRender.includes('显示 0 条'), '列出话题时不该说「显示 0 条」')
+  assert.match(searchRender, /话题\/议题 2 条/, '话题条数要并进命中统计')
+  console.log('57. 命中话题的正文在 recall/search 渲染里看得见')
+}
+console.log('\n57 项全部通过（data dir: ' + dir + '）')
 
 process.exit(0)

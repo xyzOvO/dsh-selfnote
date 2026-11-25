@@ -128,19 +128,27 @@ let forcedTab = null
 let forcedNotice = null
 let forcedBusy = null
 let showRetired = false
+// 假 setState 真解函数式 updater；交互用例靠它观察连续翻页不会读旧闭包值。
+const stateBySlot = new Map()
+function setSlot(slot, update) {
+  const prev = stateBySlot.has(slot) ? stateBySlot.get(slot) : slot.initial
+  stateBySlot.set(slot, typeof update === 'function' ? update(prev) : update)
+}
 const React = {
   createElement: (type, props, ...children) => ({ type, props: props || {}, children: children.flat() }),
   useState(initial) {
     useStateCall += 1
-    if (useStateCall === 1) return [current, () => {}]
-    if (forcedNotice !== null && useStateCall === 2) return [forcedNotice, () => {}]
-    if (forcedBusy !== null && useStateCall === 3) return [forcedBusy, () => {}]
-    if (showRetired && useStateCall === 26) return [true, () => {}]
-    if (forcedTab !== null && useStateCall === 9) return [forcedTab, () => {}]
-    if (forcedTab !== null && useStateCall === 10) return [true, () => {}]
+    const slot = { id: useStateCall, initial: typeof initial === 'function' ? null : initial }
+    const value = stateBySlot.has(slot.id) ? stateBySlot.get(slot.id) : slot.initial
+    if (useStateCall === 1) return [current, (u) => setSlot(1, u)]
+    if (forcedNotice !== null && useStateCall === 2) return [forcedNotice, (u) => setSlot(2, u)]
+    if (forcedBusy !== null && useStateCall === 3) return [forcedBusy, (u) => setSlot(3, u)]
+    if (showRetired && useStateCall === 26) return [true, (u) => setSlot(26, u)]
+    if (forcedTab !== null && useStateCall === 9) return [forcedTab, (u) => setSlot(9, u)]
+    if (forcedTab !== null && useStateCall === 10) return [true, (u) => setSlot(10, u)]
     // 第 21 个是「临时自述保质期」：从 state 里取，好断言它真的渲染出来了
-    if (useStateCall === 21) return [String((current && current.tempTtlDays) ?? ''), () => {}]
-    return [typeof initial === 'function' ? null : initial, () => {}]
+    if (useStateCall === 21) return [String((current && current.tempTtlDays) ?? ''), (u) => setSlot(21, u)]
+    return [value, (u) => setSlot(slot.id, u)]
   },
   useEffect() {},
   useCallback: (fn) => fn,
@@ -167,6 +175,19 @@ function render(state) {
   current = state
   useStateCall = 0
   return wrapper.type({})
+}
+function readSlot(id) {
+  return stateBySlot.get(id)
+}
+
+function clickLoadMore() {
+  forcedTab = 'persona'
+  forcedBusy = ''
+  useStateCall = 0
+  const tree = collect(wrapper.type({}))
+  const button = tree.find((node) => node.type === 'button' && typeof node.props.onClick === 'function' && node.children && node.children[0] === '加载更多')
+  if (!button) throw new Error('找不到「加载更多」按钮')
+  button.props.onClick()
 }
 
 function collect(node, out = []) {
@@ -410,6 +431,7 @@ console.log('11. 已生效的习惯能看见、能撤销')
 
 /* 12. 人格页：三段都能改、字数看得见、纠偏证据只是证据 */
 forcedTab = 'persona'
+stateBySlot.clear()
 tree = render(base)
 json = JSON.stringify(tree)
 nodes = collect(tree)
@@ -643,6 +665,58 @@ assert.ok(!json.includes('undefined'), '兼容旧数据时渲染结果里不该�
 forcedTab = null
 console.log('23. 旧 /state 只有 skipped 字符串时仍能渲染')
 
-console.log(String.fromCharCode(10) + '23 项全部通过')
+/* 24. 翻页：同 tick 连点只发一次；点→等→点两页都在 */
+const pagedState = { ...base, facts: { candidates: [], approved: [], retired: 0 }, corrections: { ...base.corrections, nextCursor: 'cursor-2' } }
+let fetchQueue = []
+let fetchCalls = 0
+const realFetch = globalThis.fetch
+globalThis.fetch = () => {
+  fetchCalls += 1
+  return Promise.resolve({
+    ok: true,
+    status: 200,
+    text: () => Promise.resolve(JSON.stringify(fetchQueue.shift() || { items: [], nextCursor: '' })),
+  })
+}
+forcedTab = 'persona'
+stateBySlot.clear()
+render(pagedState)
+fetchQueue.push({ items: [{ id: 'p1' }], nextCursor: 'cursor-3' })
+clickLoadMore()
+clickLoadMore() // 同 tick 第二点：游标没更新，in-flight 锁应挡住
+await new Promise((resolve) => setTimeout(resolve, 0))
+assert.equal(fetchCalls, 1, '同 tick 连点只发一次请求')
+assert.deepEqual((readSlot(29) || []).map((item) => item.id), ['p1'], '同 tick 连点只追加一页')
+fetchQueue.push({ items: [{ id: 'p2' }], nextCursor: '' })
+clickLoadMore() // 上一轮已 settle、游标更新到 cursor-3，翻下一页
+await new Promise((resolve) => setTimeout(resolve, 0))
+assert.deepEqual((readSlot(29) || []).map((item) => item.id), ['p1', 'p2'], '点→等→点两页都在')
+globalThis.fetch = realFetch
+console.log('24. 翻页同 tick 连点只发一次，点→等→点两页都在')
+/* 25. catch 回调自身抛错时锁也要释放（否则永久卡死不能再翻页） */
+let boomCalls = 0
+let boomThrow = true
+globalThis.fetch = () => {
+  boomCalls += 1
+  if (boomThrow) return Promise.reject({ get message() { throw new Error('getter boom') } })
+  return Promise.resolve({
+    ok: true,
+    status: 200,
+    text: () => Promise.resolve(JSON.stringify({ items: [{ id: 'p3' }], nextCursor: '' })),
+  })
+}
+forcedTab = 'persona'
+stateBySlot.clear()
+render(pagedState)
+clickLoadMore()
+await new Promise((resolve) => setTimeout(resolve, 0))
+boomThrow = false
+clickLoadMore()
+await new Promise((resolve) => setTimeout(resolve, 0))
+assert.equal(boomCalls, 2, 'catch 回调自身抛错后锁必须释放，否则再也不能翻页')
+globalThis.fetch = realFetch
+console.log('25. 翻页失败回调自身抛错后，锁仍会释放')
+
+console.log(String.fromCharCode(10) + '25 项全部通过')
 
 process.exit(0)

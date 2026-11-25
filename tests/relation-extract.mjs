@@ -55,6 +55,25 @@ test('propose 落三层：topic + episode + 带出处的 fact', async () => {
   assert.equal(memory.readFacts()[0].episodeId, 'e-架构', 'fact 带 episodeId 落库')
 })
 
+test('episode 传入合法 status 落库，非法值回退 open', async () => {
+  const closed = await extractHandler({
+    action: 'propose',
+    episodes: [{ title: '已收尾议题', status: 'closed' }],
+  })
+  assert.equal(closed.episodes[0].ok, true, JSON.stringify(closed.episodes[0]))
+  assert.equal(closed.episodes[0].episode.status, 'closed')
+  const archived = await extractHandler({
+    action: 'propose',
+    episodes: [{ title: '已归档议题', status: 'archived' }],
+  })
+  assert.equal(archived.episodes[0].episode.status, 'archived')
+  const weird = await extractHandler({
+    action: 'propose',
+    episodes: [{ title: '怪状态议题', status: 'weird' }],
+  })
+  assert.equal(weird.episodes[0].episode.status, 'open')
+})
+
 test('fact 无 citation：该项 ok:false 且不落库', async () => {
   const before = memory.readFacts().length
   const out = await extractHandler({

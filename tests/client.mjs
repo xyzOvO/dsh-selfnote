@@ -432,5 +432,30 @@ findButtons(st).filter(function (b) { return treeText(b).includes('去改') })[0
 assert.ok(located.some(function (x) { return x.kind === 'scroll' && x.id === 'sn-fact-f1' }), '记忆「去改」应滚动到对应那条')
 console.log('10. 「去改」滚动到下方编辑框并短暂高亮')
 
-console.log('\n10 项全部通过')
-process.exit(0)
+/* ---------- 导入提示：added 之外的跳过/无效/降级也要报数 ---------- */
+const report = {
+  added: { facts: 1, notes: 2, habits: 3 },
+  skipped: { facts: 4, notes: 5, habits: 6, invalid: 7 },
+  demoted: 8,
+  droppedNotes: 9,
+  keepStatus: false,
+  conflicts: 0,
+  persona: { action: 'none', file: '' },
+  indexStale: true,
+  configApplied: 0,
+  before: {},
+  after: {},
+}
+const summary = mod.importSummary({ import: report })
+assert.ok(summary.includes('加了 1 条记忆、2 条自述、3 个习惯'), '提示要报全三类 added')
+assert.ok(summary.includes('跳过 22 条（重复 15 条、无效 7 条）'), '提示要报 skipped 与 invalid')
+assert.ok(summary.includes('降回候选 8 条'), '提示要报 demoted')
+assert.ok(summary.includes('自述超容量 9 条没放进'), '提示要报 droppedNotes')
+console.log('11. 导入提示汇总 added/skipped/demoted/droppedNotes')
+
+/* ---------- 批2 复审：同文冲突也要报数 ---------- */
+const conflictSummary = mod.importSummary({ import: { ...report, conflicts: 3 } })
+assert.ok(conflictSummary.includes('同文冲突 3 条'), '提示要报 conflicts')
+console.log('12. 导入提示补报同文冲突')
+
+console.log('\n12 项全部通过')
