@@ -717,6 +717,60 @@ assert.equal(boomCalls, 2, 'catch 回调自身抛错后锁必须释放，否则�
 globalThis.fetch = realFetch
 console.log('25. 翻页失败回调自身抛错后，锁仍会释放')
 
-console.log(String.fromCharCode(10) + '25 项全部通过')
+
+/* 26. 批量 preset 操作要两步确认：第一次不发包，第二次才真的执行 */
+{
+  forcedTab = 'overview'
+  stateBySlot.clear()
+  const presetState = {
+    ...base,
+    presets: {
+      items: [
+        { key: 'first', text: '先给方案', imported: true },
+        { key: 'second', text: '没验证不说完成', imported: false },
+      ],
+      importedCount: 1,
+      total: 2,
+    },
+  }
+  let presetFetchCalls = 0
+  const presetBodies = []
+  const previousFetch = globalThis.fetch
+  globalThis.fetch = (url, init) => {
+    presetFetchCalls += 1
+    presetBodies.push(JSON.parse(init.body))
+    return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify({ ok: true })) })
+  }
+  try {
+    const tree = render(presetState)
+    const nodes = collect(tree)
+    const removeAll = nodes.find((node) => node.type === 'button' && node.children[0] === '全部移除')
+    assert.ok(removeAll, '批量操作入口要在概览页可见')
+    removeAll.props.onClick()
+    assert.equal(presetFetchCalls, 0, '第一次点批量移除不能直接发 /preset 请求')
+    const armedTree = render(presetState)
+    const armed = collect(armedTree).find((node) => node.type === 'button' && typeof node.children[0] === 'string' && node.children[0].includes('真的移除'))
+    assert.ok(armed, '第一次点后按钮要变成二次确认文案')
+    assert.match(armed.props.className, /sn-btn-danger/, '确认态要带危险样式')
+    armed.props.onClick()
+    assert.equal(presetFetchCalls, 1, '第二次点才发 /preset 请求')
+    assert.deepEqual(presetBodies[0], { op: 'remove', keys: ['first'] }, '确认后要按目标 op/keys 执行')
+    // 导入全部同样走两步确认：与「全部移除」共用 runPresetOp 的 interactive 分支
+    const importAll = collect(render(presetState)).find((node) => node.type === 'button' && typeof node.children[0] === 'string' && node.children[0].includes('导入全部'))
+    assert.ok(importAll, '导入全部入口要在概览页可见')
+    importAll.props.onClick()
+    assert.equal(presetFetchCalls, 1, '第一次点导入全部不能直接发 /preset 请求')
+    const importArmed = collect(render(presetState)).find((node) => node.type === 'button' && typeof node.children[0] === 'string' && node.children[0].includes('真的导入'))
+    assert.ok(importArmed, '第一次点后导入按钮要变成二次确认文案')
+    importArmed.props.onClick()
+    assert.equal(presetFetchCalls, 2, '第二次点导入全部才发请求')
+    assert.equal(presetBodies[1].op, 'import', '确认后要按 import 执行')
+  } finally {
+    globalThis.fetch = previousFetch
+    forcedTab = null
+  }
+  console.log('26. 批量 preset 操作两步确认：第一次不发包，第二次才执行')
+}
+console.log(String.fromCharCode(10) + '26 项全部通过')
 
 process.exit(0)

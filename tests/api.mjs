@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { mkdirSync, mkdtempSync, readFileSync, existsSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, existsSync, writeFileSync, chmodSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { zstdCompressSync } from 'node:zlib'
@@ -31,8 +31,9 @@ let injectionDef = null
 // 驱动循环整个生命周期都在 withInitiator(agent) 里，所以注入时要能问出「当前是哪个 agent」
 let currentAgent = null
 
+const warnLog = []
 const ctx = {
-  logger: { info() {} },
+  logger: { info() {}, warn(message) { warnLog.push(String(message)) } },
   on() {},
   agents: { currentInitiator: () => currentAgent },
   systemPrompt: { context(def) { injectionDef = def; return () => {} } },
@@ -1021,7 +1022,79 @@ console.log('52. state 带人格与纠偏，体检六组十四项')
   console.log('53. 人格迁移：空则采用、同则跳过、异则落旁路文件，本机那份不被盖')
 }
 
-/* 54. 开机补完：上次保存崩在中途，重启时按日志补齐 */
+/* 54. /import 中途写失败时不能保留半份数据 */
+{
+  const factsFile = join(dir, 'memory', 'facts.jsonl')
+  const notesFile = join(dir, 'notes.md')
+  const beforeFacts = readFileSync(factsFile, 'utf8')
+  const beforeNotes = readFileSync(notesFile, 'utf8')
+  const importBundle = {
+    app: 'dsh-selfnote',
+    v: 2,
+    facts: [{ id: 'rollback-1', text: '导入后应当回滚掉的事实', status: 'candidate' }],
+    notes: [{ date: '2026-11-25', text: '导入后应当回滚掉的自述' }],
+  }
+  chmodSync(notesFile, 0o444)
+  let failed = false
+  try {
+    const res = await call('POST', '/api/selfnote/import', { bundle: importBundle })
+    assert.equal(res.status, 500, JSON.stringify(res.payload))
+    failed = true
+  } finally {
+    chmodSync(notesFile, 0o644)
+  }
+  assert.equal(failed, true, '不可写目标必须让导入失败')
+  assert.equal(readFileSync(factsFile, 'utf8'), beforeFacts, '中途写失败后 facts 必须回滚')
+  assert.equal(readFileSync(notesFile, 'utf8'), beforeNotes, '中途写失败后 notes 必须回滚')
+  console.log('54. /import 中途失败时回滚已写入的 facts/notes')
+}
+
+/* 54b. /import 失败在 habits 写之后：habits 也必须回滚（snap(habitsFile) 曾误传函数，快照恒 null） */
+{
+  const habitsFile = join(dir, 'memory', 'habits.jsonl')
+  const configFile = join(dir, 'config.json')
+  const beforeHabits = readFileSync(habitsFile, 'utf8')
+  const beforeConfig = readFileSync(configFile, 'utf8')
+  const importBundle = {
+    app: 'dsh-selfnote',
+    v: 2,
+    facts: [{ id: 'rollback-h-1', text: '回滚测试事实 h', status: 'candidate' }],
+    notes: [{ date: '2026-11-25', text: '回滚测试自述 h' }],
+    habits: [{ text: '回滚测试习惯', status: 'active' }],
+    config: { heading: '回滚测试抬头' },
+  }
+  chmodSync(configFile, 0o444)
+  let failed = false
+  try {
+    const res = await call('POST', '/api/selfnote/import', { bundle: importBundle })
+    if (res.status === 500) failed = true
+  } finally {
+    chmodSync(configFile, 0o644)
+  }
+  assert.equal(failed, true, 'config 不可写必须让导入在写 habits 之后失败')
+  assert.equal(readFileSync(habitsFile, 'utf8'), beforeHabits, '中途写失败后 habits 必须回滚')
+  assert.equal(readFileSync(configFile, 'utf8'), beforeConfig, '中途写失败后 config 必须不变')
+  console.log('54b. /import 失败在 config 时 habits 也回滚')
+}
+
+/* 54c. 生产 logger 桥：坏 state.json 时 /state 仍降级为空状，但必须经 ctx.logger.warn 留痕（不能只靠测试自己设桩） */
+{
+  const stateFile = join(dir, 'memory', 'state.json')
+  const before = existsSync(stateFile) ? readFileSync(stateFile, 'utf8') : null
+  writeFileSync(stateFile, '{ 坏掉的 JSON')
+  warnLog.length = 0
+  try {
+    const res = await call('GET', '/api/selfnote/state')
+    assert.equal(res.status, 200)
+    assert.ok(warnLog.some((m) => m.includes('state.json 解析失败')), '坏 state 必须经 ctx.logger.warn 留痕，不能只在测试桩里可见')
+  } finally {
+    if (before === null) { try { unlinkSync(stateFile) } catch {} }
+    else writeFileSync(stateFile, before)
+  }
+  console.log('54c. 坏 state 经生产 logger 桥留 warn')
+}
+
+/* 55. 开机补完：上次保存崩在中途，重启时按日志补齐 */
 {
   const tx = await import('../lib/persona-tx.js')
   const { personaPath } = await import('../lib/persona.js')
@@ -1037,7 +1110,7 @@ console.log('52. state 带人格与纠偏，体检六组十四项')
   apply(ctx, {}) // 相当于重启插件
   assert.equal(existsSync(join(dir, 'persona.pending.json')), false, '开机时应该把半截事务补完，而不是留着等人来救')
   assert.ok(existsSync(personaPath()), 'persona.md 该在')
-  console.log('54. 开机补完半截事务：重启即幂等重放，日志清掉，人格文件不动')
+  console.log('55. 开机补完半截事务：重启即幂等重放，日志清掉，人格文件不动')
 }
 
 /* 55. 只给一段不会清空别的；三段都不给直接拒绝 */
@@ -1056,7 +1129,7 @@ assert.equal(partial.l1, '只改第二段。')
 rp = await call('POST', '/api/selfnote/persona', {})
 assert.equal(rp.status, 400, '空对象不能把整份人格抹掉')
 assert.equal(readPersona().l1, '只改第二段。')
-console.log('55. 部分字段保存不清空其它段，空对象被拒')
+console.log('56. 部分字段保存不清空其它段，空对象被拒')
 
 /* 56. 界面要用的三个数：半衰期、L2 上限、纠偏游标 —— 缺一个界面就得自己瞎猜 */
 rp = await call('GET', '/api/selfnote/state')
@@ -1071,7 +1144,7 @@ rp = await call('POST', '/api/selfnote/config', { halfLifeDays: 999 })
 assert.equal(rp.status, 400, '越界的半衰期要被拒')
 rp = await call('POST', '/api/selfnote/config', { halfLifeDays: 30, profileMaxChars: 110 })
 assert.equal(rp.status, 200)
-console.log('56. 半衰期/画像上限/纠偏游标都在 state 里，越界被拒')
+console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被拒')
 
 /* 57. 批2-6：命中话题记了 readCount，就得把话题正文渲染出来（门牌「memory_recall 查」不能骗人） */
 {
@@ -1089,7 +1162,7 @@ console.log('56. 半衰期/画像上限/纠偏游标都在 state 里，越界被
   assert.match(searchRender, /在搭本地知识库/, 'memory_search 渲染要带命中话题摘要')
   assert.ok(!searchRender.includes('显示 0 条'), '列出话题时不该说「显示 0 条」')
   assert.match(searchRender, /话题\/议题 2 条/, '话题条数要并进命中统计')
-  console.log('57. 命中话题的正文在 recall/search 渲染里看得见')
+  console.log('58. 命中话题的正文在 recall/search 渲染里看得见')
 }
 console.log('\n57 项全部通过（data dir: ' + dir + '）')
 

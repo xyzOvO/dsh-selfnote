@@ -223,5 +223,21 @@ console.log('15. memoryStats 数字对得上')
   console.log('16. 检索留痕：seenCount 单独记，不动热度，十分钟内去重')
 }
 
-console.log('\n16 项全部通过')
+/* 17. state.json 坏了只降级，但必须留一条 warn —— 静默吞掉会让排障的人瞎猜 */
+{
+  writeFileSync(join(cache, 'state.json'), '{ 这不是合法 JSON')
+  const warnings = []
+  globalThis.__dshSelfnoteLogger = {
+    warn(message) { warnings.push(message) },
+  }
+  try {
+    assert.deepEqual(memory.readState(), {}, '坏 state 仍按空状态降级，返回语义不变')
+    assert.ok(warnings.some((message) => String(message).includes('state.json 解析失败')), '坏 state 必须留 warn')
+  } finally {
+    delete globalThis.__dshSelfnoteLogger
+  }
+  console.log('17. state.json 解析失败：降级为空状态，但必须留 warn')
+}
+
+console.log('\n17 项全部通过')
 process.exit(0)
