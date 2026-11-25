@@ -208,7 +208,7 @@ const panelNodes = nodes.filter((node) => node.props && node.props.role === 'tab
 assert.equal(panelNodes.length, 1, '只渲染当前页签的面板')
 assert.equal(panelNodes[0].props.id, 'sn-panel-memory')
 assert.equal(panelNodes[0].props['aria-labelledby'], 'sn-tab-memory')
-assert.ok(tabs.every((node) => typeof node.props['aria-controls'] === 'string'), '每个页签要指明控制哪个面板')
+assert.ok(tabs.every((node) => node.props['aria-controls'] === String(node.props.id).replace('sn-tab-', 'sn-panel-')), '每个页签的 aria-controls 指向自己的面板，而非当前面板')
 console.log('2. 六个页签、单选状态与面板 aria 关系都对')
 
 /* 3. 没有待审候选：停在「概览」 */

@@ -143,7 +143,12 @@ ok('client.js: UTF-16 maxLength / 错误变量 / 悬空 aria / 重复截断 / �
   assert.equal(src.includes('--dsh-text-secondary'), false, '变量命名空间应是 --dsw-alias-*')
   assert.ok(src.includes('.sn-transfer-warn{color:#fcd34d}'), 'dark media 要覆盖 warn 前景')
   assert.equal(src.includes('setMoreEvidence([])'), false, 'apply() 不该清掉翻页追加')
-  assert.ok(src.includes("'aria-controls': 'sn-panel-' + activeTab"), '所有页签指向同一个真实面板')
+  assert.ok(src.includes("'aria-controls': 'sn-panel-' + item.key"), '每个页签指向自己的面板，而不是都指向当前面板')
+  assert.ok(src.includes("{ key: 'topics', label: '话题'"), '预算条要画出话题段，八段账才对得上')
+  assert.equal(src.includes('七段预算'), false, '体检文案不许再说七段（实际八段）')
+  assert.ok(src.includes("'aria-hidden': true"), '装饰符号要对读屏隐藏')
+  const doc = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
+  assert.equal(doc.includes('七段预算'), false, '体检文案不许再说七段（实际八段）')
   assert.ok(src.includes("if (busy !== '') return"), 'importBundle 要有 busy 闸')
 })
 

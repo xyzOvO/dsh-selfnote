@@ -87,10 +87,14 @@ function call(method, url, body) {
 
 /* 2. 容量告警里的「N 字」按码点报，别拿 UTF-16 冒充 */
 {
+  // temp 有 14 天 TTL：写死日期会随时间推移过期，过期的 temp 不占注入额度，
+  // 会改变 stableLimit 与 displaced 计数，让「151 字」告警退化成空串。用今天保证未过期。
+  const now = new Date()
+  const fresh = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   store.writeNotes([])
   writeFileSync(store.notesPath(), [
-    store.renderNotes([{ date: '2026-11-08', text: 'T1', tier: 'temp', pin: false }]),
-    store.renderNotes([{ date: '2026-11-08', text: 'T2', tier: 'temp', pin: false }]),
+    store.renderNotes([{ date: fresh, text: 'T1', tier: 'temp', pin: false }]),
+    store.renderNotes([{ date: fresh, text: 'T2', tier: 'temp', pin: false }]),
   ].join('\n') + '\n')
   const long = 'b'.repeat(150) + WHALE // 151 码点 / 152 UTF-16 单位；stableLimit = 150
   const res = await tools[0].execute({ action: 'write', text: long, tier: 'stable' })
