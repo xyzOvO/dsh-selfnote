@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const src = readFileSync(fileURLToPath(new URL('../lib/client.js', import.meta.url)), 'utf8')
+const pkg = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'))
 
 assert.match(src, /className: 'sn-intro',\s*open: true/, '新用户引导 intro 要默认展开')
 assert.match(src, /\/ 话题 ' \+ caps\.topic/, 'intro 预算行要列话题段，和概览预算条口径一致')
@@ -24,7 +25,12 @@ assert.ok(!src.includes('人格（自述）'), '入口名要统一改成「AI �
 assert.match(src, /h\('div',\s*\{\s*className: 'sn-title'\s*\},\s*'AI 记忆'\)/, '设置页主标题要叫 AI 记忆')
 assert.match(src, /return 'AI 记忆'/, '侧栏入口 label 要叫 AI 记忆')
 assert.match(src, /左下角齿轮 → AI 记忆 → 记忆/, '侧栏空态指引要用新入口名')
-assert.match(src, /'details',[\s\S]{0,120}sn-relations[\s\S]{0,200}关系记忆/, '关系记忆卡要包在默认折叠的 details 里')
+// 精确切出关系卡那段 h('details', {...}, ...) 的属性对象，确认没有 open:true（默认折叠）
+const relAt = src.indexOf("className: 'sn-card sn-relations'")
+assert.ok(relAt > 0, '关系记忆卡要包在 details 里')
+const relWindow = src.slice(relAt - 60, relAt + 120)
+assert.ok(/'details'/.test(relWindow), '关系卡根节点是 details')
+assert.ok(!/\bopen\s*:/.test(relWindow), '关系卡默认折叠，不能带 open 属性')
 assert.match(src, /sn-relations > summary\{cursor:pointer/, '折叠关系卡要有可点击的 summary 样式')
 assert.ok(!src.includes('presets.json'), '用户可见文案不说 presets.json')
 assert.ok(!src.includes("' ← ' + part.factId"), '用户可见文案不说裸 factId')
@@ -33,4 +39,10 @@ assert.ok(!/来源标着 preset/.test(src), '用户可见文案不说「来源�
 assert.ok(!/同 key/.test(src), '用户可见文案不说「同 key」')
 assert.ok(!/aria-label': '勾选 ' \+ item\.key/.test(src), '勾选读屏标签不说 item.key')
 
-console.log('批5 UX：intro / 入口名 / 关系卡折叠 / 内部词白话化')
+// 护栏必须进默认测试，否则形同虚设（batch5-reviewer 复审 Important）
+assert.ok(
+  String(pkg.scripts.test).includes('node tests/ux-regressions.mjs'),
+  'npm test 默认脚本要接上 ux-regressions.mjs',
+)
+
+console.log('批5 UX：intro / 入口名 / 关系卡折叠 / 内部词 / 默认测试接线')
