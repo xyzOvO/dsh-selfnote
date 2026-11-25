@@ -189,7 +189,7 @@ const lonePlan = review.proposeCandidates({
 })
 assert.equal(lonePlan.saved.length, 0)
 assert.equal(lonePlan.rejected.length, 2)
-for (const row of lonePlan.rejected) assert.match(String(row.reason), /样本量|≥3|会话|边界/)
+for (const row of lonePlan.rejected) assert.match(String(row.reason), /样本量|≥2|会话|边界/)
 console.log('5. 行为与权限边界的孤例一律打回')
 
 /* 6. 操作路径样本量 1 且没 verified 也打回 */
@@ -352,4 +352,105 @@ assert.equal(badAction.status, 400)
 assert.match(badAction.payload.error, /action|不支持|只能/)
 console.log('14. /review API 接入审批入口，不提供自动批准动作')
 
-console.log('14 项全部通过')
+/* 15. Task 2：propose 只认自己核回的本人原话，门槛与报告分布同步 */
+function task2Evidence(sessionId, index, quote, extra = {}) {
+  return { sessionId, index, quote, provenance: 'own', ...extra }
+}
+const ownAQuote = '以后回答先给结论，中文正常说'
+const ownBQuote = '结论先行，英文术语带一句白话解释'
+const quotedQuote = '助手转述的一条'
+const pastedQuote = '[Important] 文件:12 — 粘贴文本'
+const boundaryQuote = '别自动改配置文件，要先问'
+writeSession('t2-own-a', [userMessage(0, Date.parse(AT) + 10000, ownAQuote)])
+writeSession('t2-own-b', [userMessage(0, Date.parse(AT) + 11000, ownBQuote)])
+writeSession('t2-quoted', [assistantMessage(0, Date.parse(AT) + 12000, quotedQuote)])
+writeSession('t2-pasted', [userMessage(0, Date.parse(AT) + 13000, pastedQuote)])
+writeSession('t2-boundary', [userMessage(0, Date.parse(AT) + 14000, boundaryQuote)])
+
+const ownBehaviorPlan = review.proposeCandidates({
+  items: [{
+    text: '中文正常说、结论先行，英文术语顺手带一句白话解释',
+    risk: 'behavior',
+    target: 'candidate-fact',
+    boundary: true,
+    evidence: [
+      task2Evidence('t2-own-a', 0, ownAQuote),
+      task2Evidence('t2-own-b', 0, ownBQuote),
+    ],
+  }],
+  now: new Date(AT),
+})
+assert.equal(ownBehaviorPlan.saved.length, 1, '2 条 own + 2 会话 + boundary 应 saved')
+assert.equal(ownBehaviorPlan.rejected.length, 0)
+assert.deepEqual(ownBehaviorPlan.saved[0].provenance, { own: 2, quoted: 0, pasted: 0 }, 'saved 要带 provenance 分布')
+const ownBehaviorReport = JSON.parse(readFileSync(ownBehaviorPlan.reportPath, 'utf8'))
+assert.deepEqual(ownBehaviorReport.provenance, { own: 2, quoted: 0, pasted: 0 }, '报告要按 evidence 行汇总 provenance 分布')
+assert.deepEqual(ownBehaviorReport.saved[0].provenance, { own: 2, quoted: 0, pasted: 0 })
+
+const outerTagPlan = review.proposeCandidates({
+  items: [{
+    text: '外层标 own 但原文是助手，必须拒收',
+    risk: 'procedure',
+    verified: true,
+    evidence: [
+      task2Evidence('t2-quoted', 0, quotedQuote),
+      task2Evidence('t2-pasted', 0, pastedQuote, { provenance: 'own' }),
+    ],
+  }],
+  now: new Date(AT),
+})
+assert.equal(outerTagPlan.saved.length, 0, '外层 provenance=own 不可信')
+assert.equal(outerTagPlan.rejected.length, 1)
+assert.match(String(outerTagPlan.rejected[0].reason), /没有可核对的本人原话证据/)
+assert.deepEqual(outerTagPlan.rejected[0].provenance, { own: 0, quoted: 1, pasted: 1 }, 'rejected 要带 provenance 分布')
+const outerTagReport = JSON.parse(readFileSync(outerTagPlan.reportPath, 'utf8'))
+assert.deepEqual(outerTagReport.provenance, { own: 0, quoted: 1, pasted: 1 })
+assert.deepEqual(outerTagReport.rejected[0].provenance, { own: 0, quoted: 1, pasted: 1 })
+
+const verifiedQuotedPlan = review.proposeCandidates({
+  items: [{
+    text: 'procedure verified 也不能靠转述出草案',
+    risk: 'procedure',
+    verified: true,
+    evidence: [task2Evidence('t2-quoted', 0, quotedQuote)],
+  }],
+  now: new Date(AT),
+})
+assert.equal(verifiedQuotedPlan.saved.length, 0, 'procedure verified 非 own 也拒')
+assert.match(String(verifiedQuotedPlan.rejected[0].reason), /没有可核对的本人原话证据/)
+assert.deepEqual(verifiedQuotedPlan.rejected[0].provenance, { own: 0, quoted: 1, pasted: 0 })
+
+const mixedPlan = review.proposeCandidates({
+  items: [{
+    text: '一条 own 一条 pasted 不够行为规则',
+    risk: 'behavior',
+    boundary: true,
+    evidence: [
+      task2Evidence('t2-boundary', 0, boundaryQuote),
+      task2Evidence('t2-pasted', 0, pastedQuote, { provenance: 'own' }),
+    ],
+  }],
+  now: new Date(AT),
+})
+assert.equal(mixedPlan.saved.length, 0)
+assert.deepEqual(mixedPlan.rejected[0].provenance, { own: 1, quoted: 0, pasted: 1 })
+assert.match(String(mixedPlan.rejected[0].reason), /样本量|会话|边界/)
+
+/* 16. 老证据没有 provenance 字段，按 own 处理 */
+const legacyPlan = review.proposeCandidates({
+  items: [{
+    text: '老证据没有来源标记也算本人原话',
+    risk: 'procedure',
+    verified: true,
+    evidence: [
+      { sessionId: 't2-own-a', index: 0, quote: ownAQuote },
+      { sessionId: 't2-own-b', index: 0, quote: ownBQuote },
+    ],
+  }],
+  now: new Date(AT),
+})
+assert.equal(legacyPlan.saved.length, 1, '无 provenance 字段按 own')
+assert.deepEqual(legacyPlan.saved[0].provenance, { own: 2, quoted: 0, pasted: 0 })
+console.log('15-16. propose 只认独立核回的本人原话，门槛与报告分布同步')
+
+console.log('16 项全部通过')
