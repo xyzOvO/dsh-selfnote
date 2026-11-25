@@ -451,6 +451,55 @@ const legacyPlan = review.proposeCandidates({
 })
 assert.equal(legacyPlan.saved.length, 1, '无 provenance 字段按 own')
 assert.deepEqual(legacyPlan.saved[0].provenance, { own: 2, quoted: 0, pasted: 0 })
+const earlyRejectPlan = review.proposeCandidates({
+  items: [
+    { id: 'empty-text', text: '', evidence: [task2Evidence('t2-own-a', 0, ownAQuote)] },
+    {
+      id: 'too-long',
+      text: '长'.repeat(241),
+      evidence: [task2Evidence('t2-own-a', 0, ownAQuote)],
+    },
+    { id: 'no-evidence', text: '没有证据', evidence: [] },
+  ],
+  now: new Date(AT),
+})
+assert.equal(earlyRejectPlan.rejected.length, 3)
+for (const row of earlyRejectPlan.rejected) {
+  assert.deepEqual(row.provenance, { own: 0, quoted: 0, pasted: 0 }, '早退 rejected 也要带 provenance 分布')
+}
+const earlyRejectReport = JSON.parse(readFileSync(earlyRejectPlan.reportPath, 'utf8'))
+assert.deepEqual(earlyRejectReport.provenance, { own: 0, quoted: 0, pasted: 0 })
+for (const row of earlyRejectReport.rejected) {
+  assert.deepEqual(row.provenance, { own: 0, quoted: 0, pasted: 0 })
+}
+
+const citationErrorPlan = review.proposeCandidates({
+  items: [{
+    id: 'bad-citation',
+    text: '多证据里有一条出处核不回，外层标签不能算数',
+    risk: 'procedure',
+    verified: true,
+    evidence: [
+      task2Evidence('t2-own-a', 0, ownAQuote, { provenance: 'own', role: 'user' }),
+      task2Evidence('t2-missing', 0, '这段正文核不回', { provenance: 'own', role: 'user' }),
+      task2Evidence('t2-quoted', 0, quotedQuote, { provenance: 'own', role: 'user' }),
+    ],
+  }],
+  now: new Date(AT),
+})
+assert.equal(citationErrorPlan.saved.length, 0)
+assert.equal(citationErrorPlan.rejected.length, 1)
+assert.match(String(citationErrorPlan.rejected[0].reason), /出处核不回原文/)
+assert.deepEqual(citationErrorPlan.rejected[0].provenance, { own: 0, quoted: 0, pasted: 0 }, '核不回的整条不算独立判定的来源')
+const badRows = citationErrorPlan.rejected[0].evidence
+assert.deepEqual(Object.keys(badRows[0]).sort(), ['index', 'provenance', 'quote', 'sessionId'], '已核回的行带独立 provenance')
+assert.deepEqual(badRows[0].provenance, 'own')
+assert.deepEqual(Object.keys(badRows[1]).sort(), ['index', 'quote', 'sessionId'], '核不回的行不保留外层标签')
+assert.deepEqual(Object.keys(badRows[2]).sort(), ['index', 'quote', 'sessionId'], '未核到的行不保留外层标签')
+const citationErrorReport = JSON.parse(readFileSync(citationErrorPlan.reportPath, 'utf8'))
+assert.deepEqual(citationErrorReport.provenance, { own: 0, quoted: 0, pasted: 0 })
+assert.deepEqual(citationErrorReport.rejected[0].provenance, { own: 0, quoted: 0, pasted: 0 })
+
 console.log('15-16. propose 只认独立核回的本人原话，门槛与报告分布同步')
 
 console.log('16 项全部通过')
