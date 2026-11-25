@@ -1094,6 +1094,32 @@ console.log('52. state 带人格与纠偏，体检六组十四项')
   console.log('54c. 坏 state 经生产 logger 桥留 warn')
 }
 
+/* 54d. /import 与 setHabit 抢习惯锁：锁被占时 import 必须拒绝，不能静默覆盖 habits */
+{
+  const habitsFile = join(dir, 'memory', 'habits.jsonl')
+  const lockFile = habitsFile + '.lock'
+  const beforeHabits = readFileSync(habitsFile, 'utf8')
+  // 造一把新鲜的锁（pid + 刚写的 mtime），模拟另一个 DSH 窗口正在改习惯；2s 内不算 stale
+  writeFileSync(lockFile, String(process.pid))
+  let res
+  try {
+    res = await call('POST', '/api/selfnote/import', {
+      bundle: {
+        app: 'dsh-selfnote',
+        v: 2,
+        facts: [{ id: 'lock-race-f', text: '锁占用测试事实', status: 'candidate' }],
+        notes: [{ date: '2026-11-25', text: '锁占用测试自述' }],
+        habits: [{ text: '锁占用时不应写入的习惯', status: 'active' }],
+      },
+    })
+  } finally {
+    try { unlinkSync(lockFile) } catch {}
+  }
+  assert.notEqual(res.status, 200, '习惯锁被占时 import 不能成功，否则会把别人的习惯覆盖掉')
+  assert.equal(readFileSync(habitsFile, 'utf8'), beforeHabits, '锁被占时 habits 不能被覆盖')
+  console.log('54d. /import 拿不到习惯锁时拒绝，不静默覆盖')
+}
+
 /* 55. 开机补完：上次保存崩在中途，重启时按日志补齐 */
 {
   const tx = await import('../lib/persona-tx.js')

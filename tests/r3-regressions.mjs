@@ -102,6 +102,12 @@ ok('persona-tx: 刚建的空 persona.lock 不能被当陈旧锁抢走', () => {
   const st = personaTx.lockState()
   assert.equal(st.stale, false)
 })
+ok('persona-tx: 放了很久的空 persona.lock 算陈旧锁（否则永久 409）', () => {
+  const lockFile = join(store.selfnoteRoot(), 'persona.lock')
+  writeFileSync(lockFile, '')
+  const st = personaTx.lockState(Date.now() + 11 * 60 * 1000)
+  assert.equal(st.stale, true)
+})
 
 // 11/12. apply() 捕获注入定义与 tapIndex
 let injectionDef = null
