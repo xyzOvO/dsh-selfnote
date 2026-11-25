@@ -91,7 +91,7 @@ const slot = registered.find(function (item) { return item.meta.name === 'settin
 assert.ok(slot, '缺少 settings.section 注册')
 assert.equal(slot.meta.id, 'selfnote')
 assert.equal(slot.meta.order, 48)
-assert.equal(slot.meta.label(), '人格（自述）')
+assert.equal(slot.meta.label(), 'AI 记忆')
 assert.equal(typeof slot.Component, 'function')
 
 const sidebar = registered.find(function (item) { return item.meta.name === 'sidebar.panellist' })
