@@ -44,5 +44,15 @@ assert.ok(
   String(pkg.scripts.test).includes('node tests/ux-regressions.mjs'),
   'npm test 默认脚本要接上 ux-regressions.mjs',
 )
+// 批1–4 新增的回归测试也必须进默认脚本，否则保护退化（final-reviewer Minor）
+for (const t of [
+  'atomic-dir-fsync', 'atomic-tmp-exclusive', 'atomic-wx-cleanup',
+  'habit-lock', 'import-lock-read-guard', 'lock-created-cleanup', 'lock-pid',
+]) {
+  assert.ok(
+    String(pkg.scripts.test).includes('node tests/' + t + '.mjs'),
+    'npm test 默认脚本要接上 ' + t + '.mjs',
+  )
+}
 
 console.log('批5 UX：intro / 入口名 / 关系卡折叠 / 内部词 / 默认测试接线')
