@@ -117,6 +117,15 @@ assert.equal(styles.length, 1)
 assert.ok(styles[0].textContent.includes('.sn-root'))
 assert.ok(styles[0].textContent.includes('.sn-notice-warn'))
 assert.ok(styles[0].textContent.length > 1500, 'CSS 太短，可能没加载全')
+{
+  const rules = styles[0].textContent
+  const m = rules.match(/\.sn-confirm\{[^}]*\}/)
+  assert.ok(m, '确认页根容器 .sn-confirm 样式要存在')
+  assert.match(m[0], /overflow-y:\s*auto/, '确认页要能滚动，否则底部按钮被裁切看不见')
+  assert.match(m[0], /min-height:\s*0/, 'flex 子项要 min-height:0 才能收缩出滚动区')
+  assert.match(m[0], /box-sizing:\s*border-box/, 'padding 要计入高度，避免溢出窗口')
+  assert.match(m[0], /height:\s*100%|max-height:/, '要有高度约束，光有 overflow-y 也滚不起来')
+}
 dispose()
 assert.equal(styles[0].removed, true)
 console.log('1. slot 注册、label、CSS 注入与清理都正常（CSS ' + styles[0].textContent.length + ' 字符）')
