@@ -1456,6 +1456,34 @@ console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被
   console.log('65. 取代指针端到端：让位→可查→恢复全链路通')
 }
 
-console.log('\n58 项全部通过（data dir: ' + dir + '）')
+/* 66. 本轮注入事实 id 落盘：注入后 /state 带这批 id；全部退役后再注入为 [] */
+{
+  const factsFile66 = join(dir, 'memory', 'facts.jsonl')
+  const write66 = (rows) => writeFileSync(factsFile66, rows.map((row) => JSON.stringify(row)).join('\n') + '\n')
+  // 关画像，避免事实被画像吸收而不走 facts 段
+  r = await call('POST', '/api/selfnote/config', { enabled: true, profileEnabled: false })
+  assert.equal(r.status, 200)
+  write66([
+    { id: 'loc-a', text: '甲地办公的规矩记在这里', status: 'approved', channel: 'rel' },
+    { id: 'loc-b', text: '乙地办公的规矩记在这里', status: 'approved', channel: 'rel' },
+  ])
+  // 触发真实注入（facts 变化 → 注入缓存 miss）
+  injectionDef.text()
+  let st = (await call('GET', '/api/selfnote/state')).payload
+  assert.ok(Array.isArray(st.validity.injectedFactIds), '注入后 /state 要带 injectedFactIds 数组（当前 ' + String(st.validity.injectedFactIds) + '）')
+  assert.ok(st.validity.injectedFactIds.includes('loc-a'), '本轮注入的事实 loc-a 要在列表里')
+
+  // 全部退役后再触发注入 → 本轮无事实，写空数组而不是沿用上一轮
+  write66([
+    { id: 'loc-a', text: '甲地办公的规矩记在这里', status: 'retired', channel: 'rel' },
+    { id: 'loc-b', text: '乙地办公的规矩记在这里', status: 'retired', channel: 'rel' },
+  ])
+  injectionDef.text()
+  st = (await call('GET', '/api/selfnote/state')).payload
+  assert.deepEqual(st.validity.injectedFactIds, [], '全部退役后本轮无注入事实，写成空数组')
+  console.log('66. 本轮注入事实 id 落盘：注入后带 id，空注入写 []')
+}
+
+console.log('\n59 项全部通过（data dir: ' + dir + '）')
 
 process.exit(0)
