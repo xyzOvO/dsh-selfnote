@@ -58,13 +58,17 @@ assert.equal(findCandidates('随便', facts, 0).length, 0)
 console.log('2. findCandidates：Top-N 排序、去重、limit 生效')
 
 /* 3. 三重收敛 + 已处理台账：只有第一条原始信号出卡 */
+// s1=本人原话，s2=核回失败，s3=已处理，s4=强信号且核回成功但未处理的非本人来源。
+// s4 与 s1 的唯一差别是 role/文本来源，own-only 判定一旦放松就必须转红。
 const events = [
   { session: 's1', idx: 12, quote: '我说过别再提旧地址了', at: '2026-11-26', strength: 'strong' },
   { session: 's2', idx: 7, quote: '别再提旧地址了', at: '2026-11-26', strength: 'strong' },
   { session: 's3', idx: 8, quote: '我说过别再提旧地址了', at: '2026-11-26', strength: 'strong' },
+  { session: 's4', idx: 9, quote: '我说过别再提旧地址了', at: '2026-11-26', strength: 'strong', sourceKind: 'pasted' },
 ]
 const processedKey = signalKey(events[2])
 const checks = []
+const provenanceCalls = []
 const cardFacts = [
   { id: 'addr', text: '旧地址是人民路 1 号' },
   { id: 'other', text: '回答先给结论' },
@@ -76,14 +80,19 @@ const cards = buildValidityCards({
   check: ({ sessionId, seq, quote }) => {
     checks.push({ sessionId, seq, quote })
     if (sessionId === 's2') return { ok: false }
+    const own = sessionId === 's1'
     return {
       ok: true,
       session: { id: sessionId, date: '2026-11-26' },
-      record: { role: sessionId === 's1' ? 'user' : 'assistant', index: sessionId === 's1' ? 34 : 56 },
+      record: { role: own ? 'user' : 'assistant', index: own ? 34 : 56 },
       date: '2026-11-26',
     }
   },
-  provenance: provenanceOf,
+  provenance: ({ role, text }) => {
+    provenanceCalls.push({ role, text })
+    if (role !== 'user') return 'quoted'
+    return provenanceOf({ role, text })
+  },
 })
 assert.equal(cards.length, 1)
 assert.deepEqual(Object.keys(cards[0]).sort(), ['at', 'candidates', 'key', 'quote', 'source'])
@@ -93,7 +102,11 @@ assert.equal(cards[0].at, events[0].at)
 assert.equal(cards[0].source, 's1#34')
 assert.deepEqual(cards[0].candidates, findCandidates(events[0].quote, cardFacts))
 assert.deepEqual(checks, events.map((event) => ({ sessionId: event.session, seq: event.idx, quote: event.quote })))
-console.log('3. buildValidityCards：强信号 + 本人原话 + 核回成功 + 未处理 → 仅一条卡')
+assert.deepEqual(provenanceCalls, [
+  { role: 'user', text: events[0].quote },
+  { role: 'assistant', text: events[3].quote },
+])
+console.log('3. buildValidityCards：强信号 + 本人原话 + 核回成功 + 未处理 → 仅一条卡，非本人来源不出卡')
 
 /* 4. signalKey 是 eventId(session, idx, quote) 的确定性封装 */
 const event = { session: 'sess-1', idx: 12, quote: '  别再  改  ' }
