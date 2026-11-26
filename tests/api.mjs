@@ -1319,6 +1319,39 @@ console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被
   assert.equal(res.status, 400, '非法 action 必须拒绝')
 
   writeFileSync(factsFile, oldFacts)
+
+  /* T1-m1: 作废卡候选只能来自 approved 事实 */
+  const retiredId = 'validity-retired-candidate'
+  const retiredQuote = '绝无仅有的一句作废候选词'
+  const retiredEvent = {
+    id: 'ev-validity-retired-candidate', session: sessionId, idx: 0, quote: retiredQuote,
+    at: '2026-11-26', strength: 'strong',
+  }
+  const retiredSignal = validity.signalKey(retiredEvent)
+  writeFileSync(sessionFile, zstdCompressSync(Buffer.from(makeSessionBody(retiredQuote), 'utf8')))
+  corrections.writeEvents([retiredEvent])
+  writeFactRows([
+    ...rows,
+    {
+      id: retiredId,
+      text: '作废候选词：作废候选词',
+      status: 'retired',
+      channel: 'rel',
+    },
+  ])
+  state = (await call('GET', '/api/selfnote/state')).payload
+  assert.ok(
+    state.validity.cards.some((card) => card.key === retiredSignal),
+    '强信号语句应生成一张作废卡'
+  )
+  for (const card of state.validity.cards) {
+    assert.equal(
+      card.candidates.some((candidate) => candidate.id === retiredId),
+      false,
+      '已退役事实不能进入作废卡候选'
+    )
+  }
+  console.log('63. 作废卡候选只来自 approved 事实，不含 retired')
   console.log('62. 非法 action 400；有效性版本串变化时缓存键失效')
 }
 
