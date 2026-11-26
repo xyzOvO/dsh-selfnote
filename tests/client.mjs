@@ -218,6 +218,19 @@ async function renderConfirm(initialState, initialNotice) {
   await settle()
   return rerender()
 }
+async function renderConfirmFresh(initialState, initialNotice) {
+  fetchCalls = []
+  confirmInitial = [initialState === undefined ? null : initialState, initialNotice || '']
+  captured = []
+  useStateIndex = 0
+  effectFired = false
+  Confirm({})
+  await settle()
+  captured = []
+  confirmInitial = [initialState === undefined ? null : initialState, initialNotice || '']
+  useStateIndex = 0
+  return Confirm({})
+}
 
 function flattenTree(node, out) {
   out = out || []
@@ -261,6 +274,14 @@ function findConfirmItems(root) {
   walkTree(root, function (n) {
     if (n.props && typeof n.props.className === 'string' &&
         n.props.className.indexOf('sn-confirm-item') >= 0) out.push(n)
+  })
+  return out
+}
+function findValidityCards(root) {
+  const out = []
+  walkTree(root, function (n) {
+    if (n.props && typeof n.props.className === 'string' &&
+        n.props.className.indexOf('sn-validity-item') >= 0) out.push(n)
   })
   return out
 }
@@ -319,6 +340,86 @@ await settle()
 assert.ok(treeText(rerender()).includes('没改成'), '写失败要有提示，不假装成功')
 assert.ok(!treeText(rerender()).includes('已记住'), '写失败不该出现成功提示')
 console.log('8. 写失败显示失败提示，不假装成功')
+
+/* ---------- 侧栏确认页：疑似作废卡 ---------- */
+fetchMode = 'ok'
+const validityState = {
+  facts: {
+    candidates: [{ id: 'normal', text: '普通候选' }],
+  },
+  validity: {
+    cards: [
+      {
+        key: 'sig-1',
+        quote: '别再提旧地址了',
+        at: 123,
+        source: 's1#7',
+        candidates: [
+          { id: 'old-1', text: '住在旧地址' },
+          { id: 'old-2', text: '旧地址门牌号' },
+        ],
+      },
+      {
+        key: 'sig-2',
+        quote: '改成新的吧',
+        at: 456,
+        source: 's2#9',
+        candidates: [{ id: 'old-3', text: '旧偏好' }],
+      },
+    ],
+  },
+}
+confirmTree = await renderConfirmFresh(validityState, '')
+const validityCards = findValidityCards(confirmTree)
+assert.equal(validityCards.length, 2, '两张疑似作废卡都要渲染')
+assert.ok(treeText(confirmTree).includes('别再提旧地址了'), '卡上要列本人原话 quote')
+assert.ok(treeText(confirmTree).includes('住在旧地址'), '卡上要列候选 text')
+assert.ok(treeText(confirmTree).includes('旧地址门牌号'), '卡上要列每个候选 text')
+assert.ok(treeText(confirmTree).includes('改成新的吧'), '第二张卡也要列原话')
+assert.ok(treeText(validityCards[0]).includes('都不是，我自己选'), '卡级兜底文案缺失')
+assert.ok(!treeText(validityCards[0]).includes('都不是，我自己选的'), '兜底文案必须是纯文案')
+
+const firstCardButtons = findButtons(validityCards[0])
+const retireBtn = firstCardButtons.find(function (b) { return treeText(b).includes('退役') })
+const keepBtn = firstCardButtons.find(function (b) { return treeText(b).includes('保留') })
+const anyBtn = firstCardButtons.find(function (b) { return treeText(b).includes('都不是，我自己选') })
+assert.ok(retireBtn && keepBtn && anyBtn, '每个候选应有退役/保留，卡上要有兜底按钮')
+retireBtn.props.onClick()
+await settle()
+let validityPost = fetchCalls[fetchCalls.length - 1]
+assert.ok(validityPost.url.endsWith('/fact'), '动作应发往 /fact')
+assert.equal(validityPost.init.method, 'POST')
+assert.deepEqual(JSON.parse(validityPost.init.body), {
+  action: 'validity-retire', id: 'old-1', signal: 'sig-1',
+})
+keepBtn.props.onClick()
+await settle()
+validityPost = fetchCalls[fetchCalls.length - 1]
+assert.deepEqual(JSON.parse(validityPost.init.body), {
+  action: 'validity-keep', id: 'old-1', signal: 'sig-1',
+})
+anyBtn.props.onClick()
+await settle()
+validityPost = fetchCalls[fetchCalls.length - 1]
+assert.deepEqual(JSON.parse(validityPost.init.body), {
+  action: 'validity-any', signal: 'sig-1',
+})
+
+const quietNodes = []
+walkTree(confirmTree, function (n) {
+  if (!n || !n.props) return
+  const cls = typeof n.props.className === 'string' ? n.props.className : ''
+  if (n.props.role === 'alert' || n.props['aria-live'] === 'alert' ||
+      n.props['aria-live'] === 'assertive' || /dot|notification|toast|modal|popup/.test(cls)) {
+    quietNodes.push(n)
+  }
+})
+assert.equal(quietNodes.length, 0, '卡只生成不提醒，不能出现红点/alert/通知节点')
+
+confirmTree = await renderConfirmFresh({ facts: { candidates: [] }, validity: { cards: [] } }, '')
+assert.equal(findValidityCards(confirmTree).length, 0, '空 cards 不该渲染作废卡区')
+assert.ok(!treeText(confirmTree).includes('都不是，我自己选'), '空 cards 不打扰')
+console.log('13. 疑似作废卡静默渲染，三类动作与空态都正确')
 
 /* ---------- 页签内跳过提醒 ---------- */
 let sState, sTab, sIdx, sSetters
