@@ -239,5 +239,66 @@ console.log('15. memoryStats 数字对得上')
   console.log('17. state.json 解析失败：降级为空状态，但必须留 warn')
 }
 
-console.log('\n17 项全部通过')
+/* ---------- 18. 采纳重复候选：旧值让位、可恢复；冲突并存；retired 可查 ---------- */
+{
+  const oldFact = memory.stageFact({ text: '旧说法：先给结论。', citation: { sessionId: 'session-aaaa', index: 1 } })
+  assert.equal(oldFact.ok, true)
+  const oldId = oldFact.fact.id
+  assert.equal(memory.setFactStatus(oldId, 'approved').ok, true)
+
+  // 重复候选：带 mergeSuggestion 指向旧条目。直接把关系写到落库记录上（模拟采集打标）再采纳。
+  const dup = memory.stageFact({ text: '新说法：先举例再下结论。', citation: { sessionId: 'session-aaaa', index: 2 } })
+  assert.equal(dup.ok, true)
+  const dupId = dup.fact.id
+  memory.writeFacts(memory.readFacts().map((f) => f.id === dupId ? { ...f, mergeSuggestion: oldId } : f))
+  assert.equal(memory.setFactStatus(dupId, 'approved').ok, true)
+  const oldAfter = memory.readFacts().find((f) => f.id === oldId)
+  assert.equal(oldAfter.status, 'retired', '重复候选采纳后旧值必须让位')
+  assert.equal(oldAfter.supersededBy, dupId, '旧值须记下被谁取代')
+  assert.ok(oldAfter.history.some((h) => h.via === 'superseded' && h.supersededBy === dupId), '旧值须留取代痕迹')
+  const dupAfter = memory.readFacts().find((f) => f.id === dupId)
+  assert.ok(dupAfter.history.some((h) => h.via === 'supersede-adopted' && h.superseded === oldId), '新值须留双向痕迹')
+  console.log('18a. 采纳重复候选 → 旧值 retired 且双向留痕')
+
+  // 恢复旧值：连带清掉 supersededBy / retiredAt，不连锁让位别人
+  assert.equal(memory.setFactStatus(oldId, 'approved').ok, true)
+  const revivedAgain = memory.readFacts().find((f) => f.id === oldId)
+  assert.equal('retiredAt' in revivedAgain, false)
+  assert.equal('supersededBy' in revivedAgain, false, '恢复后不该残留被取代标记')
+  assert.equal(memory.listFacts('approved').some((f) => f.id === dupId), true, '恢复旧值不影响新值')
+  console.log('18b. 恢复旧值清标记、不连锁')
+
+  // 冲突候选：只带 conflictWith，旧值并存
+  const confOld = memory.stageFact({ text: '冲突旧条：用 A 方案。', citation: { sessionId: 'session-aaaa', index: 1 } })
+  const confOldId = confOld.fact.id
+  memory.setFactStatus(confOldId, 'approved')
+  const conf = memory.stageFact({ text: '冲突新条：用 B 方案。', citation: { sessionId: 'session-aaaa', index: 2 } })
+  const confId = conf.fact.id
+  memory.writeFacts(memory.readFacts().map((f) => f.id === confId ? { ...f, conflictWith: confOldId } : f))
+  memory.setFactStatus(confId, 'approved')
+  assert.equal(memory.readFacts().find((f) => f.id === confOldId).status, 'approved', '冲突类不触发让位')
+  console.log('18c. 冲突候选采纳后两条并存')
+
+  // 目标已 retired：采纳指向它的重复候选，不重复让位、不追加取代痕迹
+  const deadOld = memory.stageFact({ text: '一个已退役的旧条 QQQ。', citation: { sessionId: 'session-aaaa', index: 1 } })
+  const deadOldId = deadOld.fact.id
+  memory.setFactStatus(deadOldId, 'retired')
+  const histBefore = memory.readFacts().find((f) => f.id === deadOldId).history.length
+  const deadNew = memory.stageFact({ text: '指向已退役旧条的新说法。', citation: { sessionId: 'session-aaaa', index: 2 } })
+  const deadNewId = deadNew.fact.id
+  memory.writeFacts(memory.readFacts().map((f) => f.id === deadNewId ? { ...f, mergeSuggestion: deadOldId } : f))
+  assert.equal(memory.setFactStatus(deadNewId, 'approved').ok, true)
+  assert.equal(memory.readFacts().find((f) => f.id === deadOldId).history.length, histBefore, '目标已退役时不重复写取代痕迹')
+  console.log('18d. 目标已退役 → 跳过让位，不重复留痕')
+
+  // 检索放宽：retired 能被 searchFacts 查到，candidate 仍排除
+  const retiredOnly = memory.stageFact({ text: '一个被退役的独有词 ZQX。', citation: { sessionId: 'session-aaaa', index: 1 } })
+  memory.setFactStatus(retiredOnly.fact.id, 'retired')
+  assert.equal(memory.searchFacts('ZQX').hits.some((f) => f.id === retiredOnly.fact.id), true, 'retired 应可检索')
+  const cand = memory.stageFact({ text: '一个候选的独有词 YYY。', citation: { sessionId: 'session-aaaa', index: 1 } })
+  assert.equal(memory.searchFacts('YYY').hits.some((f) => f.id === cand.fact.id), false, 'candidate 不应进检索')
+  console.log('18e. retired 可查、candidate 不进检索')
+}
+
+console.log('\n18 项全部通过')
 process.exit(0)
