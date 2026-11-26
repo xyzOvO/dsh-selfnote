@@ -11,7 +11,7 @@
 
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.16.2-4f46e5" alt="version">
+  <img src="https://img.shields.io/badge/version-0.16.3-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
   <img src="https://img.shields.io/badge/tests-408%20passed-0ea5e9" alt="tests">
