@@ -5,9 +5,10 @@
 
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { mkdirSync, mkdtempSync, readFileSync, existsSync, writeFileSync, chmodSync, unlinkSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, existsSync, writeFileSync, chmodSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { zstdCompressSync } from 'node:zlib'
 
 const dir = mkdtempSync(join(tmpdir(), 'selfnote-api-'))
@@ -1190,6 +1191,178 @@ console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被
   assert.match(searchRender, /话题\/议题 2 条/, '话题条数要并进命中统计')
   console.log('58. 命中话题的正文在 recall/search 渲染里看得见')
 }
+
+/* 59–63. 有效性降权、作废确认卡与三动作 */
+{
+  const config = await import('../lib/index.js')
+  const memory = await import('../lib/memory.js')
+  const validity = await import('../lib/validity.js')
+  const validityVersion = validity.VALIDITY_VERSION
+  const sessionId = 'session-validity'
+  const quote1 = '别再用旧话术'
+  const quote2 = '改成用新话术'
+  const sessionDir = join(process.env.DSH_SESSIONS_DIR, 'proj', sessionId)
+  mkdirSync(sessionDir, { recursive: true })
+  const makeSessionBody = (text) => JSON.stringify({
+    type: 'user/message',
+    seq: 0,
+    time: Date.parse('2026-11-26T10:00:00Z'),
+    data: { content: [{ type: 'text', text }], role: 'user', source: { kind: 'user' } },
+  }) + '\n'
+  const sessionFile = join(sessionDir, 'session.v4.jsonl.zstd')
+  writeFileSync(sessionFile, zstdCompressSync(Buffer.from(makeSessionBody(quote1), 'utf8')))
+
+  const event1 = {
+    id: 'ev-validity-1', session: sessionId, idx: 0, quote: quote1,
+    at: '2026-11-26', strength: 'strong',
+  }
+  const event2 = {
+    id: 'ev-validity-2', session: sessionId, idx: 0, quote: quote2,
+    at: '2026-11-26', strength: 'strong',
+  }
+  const signal1 = validity.signalKey(event1)
+  const signal2 = validity.signalKey(event2)
+  const factsFile = join(dir, 'memory', 'facts.jsonl')
+  const oldFacts = readFileSync(factsFile, 'utf8')
+  const writeFactRows = (rows) => writeFileSync(factsFile, rows.map((row) => JSON.stringify(row)).join('\n') + '\n')
+  const rows = [
+    {
+      id: 'validity-free-a', text: '无冲突的一条甲：无冲突的一条甲', status: 'approved', channel: 'rel',
+      hitCount: 10, lastHit: new Date().toISOString(),
+    },
+    {
+      id: 'validity-free-b', text: '无冲突的一条乙：无冲突的一条乙', status: 'approved', channel: 'rel',
+      hitCount: 9, lastHit: new Date().toISOString(),
+    },
+    {
+      id: 'validity-b', text: '旧话术是有效的：旧话术是有效的', status: 'approved', channel: 'rel',
+      conflictWith: ['validity-free-a'], hitCount: 20, lastHit: new Date().toISOString(),
+    },
+  ]
+
+  corrections.writeEvents([event1])
+  writeFactRows(rows)
+  let state = (await call('GET', '/api/selfnote/state')).payload
+  assert.ok(state.validity && Array.isArray(state.validity.cards), 'state 要有 validity.cards')
+  assert.deepEqual(state.validity.cards.map((card) => card.key), [signal1])
+  assert.equal(state.validity.cards[0].candidates.length, rows.length, '候选卡应带上候选事实')
+  assert.deepEqual(
+    state.validity.cards[0].candidates.map((item) => item.text).sort(),
+    rows.map((row) => row.text).sort(),
+  )
+
+  const cfg = {
+    ...config.currentConfig(),
+    enabled: true,
+    profileEnabled: false,
+    personaEnabled: false,
+    halfLifeDays: 30,
+  }
+  const weighted = config.assembleInjection(cfg, { spotlight: new Set(['validity-b']) })
+  const factsSegment = weighted.segments.find((segment) => segment.key === 'facts')
+  assert.ok(factsSegment, 'facts 段要在注入里')
+  const freeAIndex = factsSegment.kept.indexOf('无冲突的一条甲：无冲突的一条甲')
+  const freeBIndex = factsSegment.kept.indexOf('无冲突的一条乙：无冲突的一条乙')
+  const conflictIndex = factsSegment.kept.indexOf('旧话术是有效的：旧话术是有效的')
+  assert.notEqual(conflictIndex, -1, '降权不是删除，带 conflictWith 的事实仍要在注入里')
+  assert.ok(conflictIndex > freeAIndex, '热度乘 0.7 后必须重排，否则降权没有改变顺序（A 档不参与本批降权）')
+  assert.ok(conflictIndex > freeBIndex, '热度乘 0.7 后应落到两条零档事实之后')
+  console.log('59. 有效性降权乘后重排；无冲突档顺序不变')
+
+  let res = await call('POST', '/api/selfnote/fact', {
+    action: 'validity-retire', id: 'validity-b', signal: signal1,
+  })
+  assert.equal(res.status, 200)
+  const retiredRow = JSON.parse(readFileSync(factsFile, 'utf8').trim().split('\n').find((line) => line.includes('validity-b')))
+  assert.equal(retiredRow.status, 'retired')
+  assert.ok(retiredRow.retiredAt)
+  const last = retiredRow.history.at(-1)
+  assert.equal(last.to, 'retired')
+  assert.equal(last.via, 'validity')
+  assert.equal(last.signal, signal1)
+  assert.equal(config.assembleInjection(cfg).text.includes('旧话术是有效的'), false, '退役后要从注入消失')
+  assert.equal(memory.searchFacts('旧话术').hits.some((fact) => fact.id === 'validity-b'), false, '退役后不再当 approved 事实召回')
+
+  res = await call('POST', '/api/selfnote/fact', { id: 'validity-b', status: 'approved' })
+  assert.equal(res.status, 200)
+  const restored = JSON.parse(readFileSync(factsFile, 'utf8').trim().split('\n').find((line) => line.includes('validity-b')))
+  assert.equal(restored.status, 'approved')
+  assert.ok(restored.retiredAt === null || restored.retiredAt === undefined, '复用已有 status approved 分支恢复时清掉 retiredAt')
+  console.log('60. validity-retire 写退役历史；恢复走既有 status 分支并清 retiredAt')
+
+  corrections.writeEvents([event1])
+  res = await call('POST', '/api/selfnote/fact', {
+    action: 'validity-keep', id: 'validity-b', signal: signal1,
+  })
+  assert.equal(res.status, 200)
+  const kept = JSON.parse(readFileSync(factsFile, 'utf8').trim().split('\n').find((line) => line.includes('validity-b')))
+  assert.equal(kept.status, 'approved', '保留不改状态')
+  assert.equal(kept.history.at(-1).via, 'validity-kept')
+  assert.equal(kept.history.at(-1).signal, signal1)
+  state = (await call('GET', '/api/selfnote/state')).payload
+  assert.deepEqual(state.validity.cards.map((card) => card.key), [], '同一 signal 处理后不再出卡')
+
+  writeFileSync(sessionFile, zstdCompressSync(Buffer.from(makeSessionBody(quote2), 'utf8')))
+  corrections.writeEvents([event2])
+  state = (await call('GET', '/api/selfnote/state')).payload
+  assert.deepEqual(state.validity.cards.map((card) => card.key), [signal2], '新 quote 是新 signal，仍要出卡')
+
+  res = await call('POST', '/api/selfnote/fact', { action: 'validity-any', signal: signal2 })
+  assert.equal(res.status, 200)
+  state = (await call('GET', '/api/selfnote/state')).payload
+  assert.deepEqual(state.validity.cards.map((card) => card.key), [], 'any 只写台账，卡片消失')
+  const afterAny = JSON.parse(readFileSync(factsFile, 'utf8').trim().split('\n').find((line) => line.includes('validity-b')))
+  assert.equal(afterAny.history.at(-1).via, 'validity-kept', 'any 不动事实历史')
+  console.log('61. keep 只压当前 signal，新 quote 仍出卡；any 只写台账')
+
+  res = await call('POST', '/api/selfnote/fact', { action: 'not-a-valid-action', id: 'validity-b', signal: signal1 })
+  assert.equal(res.status, 400, '非法 action 必须拒绝')
+
+  writeFileSync(factsFile, oldFacts)
+  console.log('62. 非法 action 400；有效性版本串变化时缓存键失效')
+}
+
+/* 63. 有效性版本串进入注入缓存键 */
+{
+  const config = await import('../lib/index.js')
+  const cfg = { ...config.currentConfig(), enabled: true, personaEnabled: false, profileEnabled: false }
+  assert.equal(typeof config.injectionKey, 'function', '缓存键函数应可测')
+  const key1 = config.injectionKey(cfg)
+  const validity = await import('../lib/validity.js')
+  assert.ok(String(key1).endsWith(config.algorithmKeyForCache()), '缓存键末尾要有有效性版本串')
+  assert.equal(config.algorithmKeyForCache(), '|vld' + validity.VALIDITY_VERSION)
+
+  const copyRoot = join(dir, 'validity-version-copy')
+  mkdirSync(copyRoot, { recursive: true })
+  cpSync(join(process.cwd(), 'lib'), join(copyRoot, 'lib'), { recursive: true })
+  writeFileSync(join(copyRoot, 'package.json'), '{"type":"module"}\n')
+  const versionFile = join(copyRoot, 'lib', 'validity.js')
+  const versionBefore = readFileSync(versionFile, 'utf8')
+  const versionAfter = versionBefore.replace(/export const VALIDITY_VERSION = '[^']*'/, "export const VALIDITY_VERSION = '2'")
+  assert.notEqual(versionAfter, versionBefore, '测试副本里的版本常量没改到')
+  writeFileSync(versionFile, versionAfter)
+  writeFileSync(
+    join(copyRoot, 'cfg.json'),
+    JSON.stringify(cfg),
+  )
+  writeFileSync(
+    join(copyRoot, 'check-version.mjs'),
+    "import { readFileSync } from 'node:fs'\n" +
+    "const cfg = JSON.parse(readFileSync(process.argv[2], 'utf8'))\n" +
+    "const { injectionKey } = await import('./lib/index.js')\n" +
+    "process.stdout.write(injectionKey(cfg))\n",
+  )
+  const probe = spawnSync(process.execPath, ['check-version.mjs', 'cfg.json'], {
+    cwd: copyRoot,
+    env: process.env,
+    encoding: 'utf8',
+  })
+  assert.equal(probe.status, 0, probe.stderr)
+  const key2 = probe.stdout.trim()
+  assert.match(key2, /\|vld2$/, '改版本常量的副本要用新版本串')
+  assert.notEqual(key2, key1, '版本串变化时缓存键必须失效')
+}
+
 console.log('\n57 项全部通过（data dir: ' + dir + '）')
 
 process.exit(0)
