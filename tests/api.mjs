@@ -1477,6 +1477,19 @@ console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被
   let st = (await call('GET', '/api/selfnote/state')).payload
   assert.ok(Array.isArray(st.validity.injectedFactIds), '注入后 /state 要带 injectedFactIds 数组（当前 ' + String(st.validity.injectedFactIds) + '）')
   assert.ok(st.validity.injectedFactIds.includes('loc-a'), '本轮注入的事实 loc-a 要在列表里')
+  const idsBeforeEmpty = [...st.validity.injectedFactIds]
+
+  // 空文本分支：禁用注入 → composeInjection 返回 '' → noteInjection('') 必须清 []，不能沿用上一轮
+  // 这段刻意让 state 里已有非空 id，才能抓到「空文本也早退、不清 []」的回归
+  r = await call('POST', '/api/selfnote/config', { enabled: false, profileEnabled: false })
+  assert.equal(r.status, 200)
+  assert.equal(injectionDef.text(), '', '禁用注入后文本应为空串')
+  st = (await call('GET', '/api/selfnote/state')).payload
+  assert.deepEqual(st.validity.injectedFactIds, [], '空文本注入也要清 []，不能沿用上文的 ' + JSON.stringify(idsBeforeEmpty))
+
+  // 重新打开注入，供后续用例与下一段
+  r = await call('POST', '/api/selfnote/config', { enabled: true, profileEnabled: false })
+  assert.equal(r.status, 200)
 
   // 全部退役后再触发注入 → 本轮无事实，写空数组而不是沿用上一轮
   write66([
