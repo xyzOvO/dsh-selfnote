@@ -1242,11 +1242,14 @@ console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被
 
   corrections.writeEvents([event1])
   writeFactRows(rows)
+  // 新语义：候选=本轮注入过的事实。预置 injectedFactIds 指向这三条
+  memory.writeState({ ...memory.readState(), injectedFactIds: ['validity-b', 'validity-free-a', 'validity-free-b'] })
   let state = (await call('GET', '/api/selfnote/state')).payload
   assert.ok(state.validity && Array.isArray(state.validity.cards), 'state 要有 validity.cards')
   assert.deepEqual(state.validity.cards.map((card) => card.key), [signal1])
-  assert.ok(state.validity.cards[0].candidates.some((item) => item.id === 'validity-b'), '候选卡带上与信号相关的 validity-b（零分无关项不硬凑）')
-  assert.equal(state.validity.cards[0].candidates.some((item) => item.id === 'validity-free-a'), false, '零分无关项不进候选')
+  assert.equal(state.validity.cards[0].candidates.length, 3, '候选恰为本轮注入的三条，与作废句字面无关')
+  assert.ok(state.validity.cards[0].candidates.some((item) => item.id === 'validity-b'), '注入过的 validity-b 进候选')
+  assert.ok(state.validity.cards[0].candidates.some((item) => item.id === 'validity-free-a'), '零字面匹配的注入事实也进候选')
 
   const cfg = {
     ...config.currentConfig(),
@@ -1396,6 +1399,7 @@ console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被
 /* 64. 作废卡处理粒度：退役一条候选，整卡和其余候选继续留着 */
 {
   const validity = await import('../lib/validity.js')
+  const memory = await import('../lib/memory.js')
   const sessionId = 'session-validity-granularity'
   const quote = '别再用旧话术和旧称呼'
   const sessionDir = join(process.env.DSH_SESSIONS_DIR, 'proj', sessionId)
@@ -1415,6 +1419,7 @@ console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被
   ]
   corrections.writeEvents([event])
   writeFileSync(factsFile, rows.map((row) => JSON.stringify(row)).join('\n') + '\n')
+  memory.writeState({ ...memory.readState(), injectedFactIds: ['gran-a', 'gran-b'] })
   let state = (await call('GET', '/api/selfnote/state')).payload
   const card0 = state.validity.cards.find((card) => card.key === signal)
   assert.ok(card0, '强信号应生成作废卡')
@@ -1484,6 +1489,47 @@ console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被
   console.log('66. 本轮注入事实 id 落盘：注入后带 id，空注入写 []')
 }
 
-console.log('\n59 项全部通过（data dir: ' + dir + '）')
+/* 67. 作废句与事实正文零字面重合时，候选仍为眼前注入的事实（不再靠字面猜） */
+{
+  const validity = await import('../lib/validity.js')
+  const memory = await import('../lib/memory.js')
+  const sessionId = 'session-validity-locality'
+  const quote = '这条不算数了' // 与任何事实正文都没有共同字
+  const sessionDir = join(process.env.DSH_SESSIONS_DIR, 'proj', sessionId)
+  mkdirSync(sessionDir, { recursive: true })
+  const sessionFile = join(sessionDir, 'session.v4.jsonl.zstd')
+  const body = JSON.stringify({
+    type: 'user/message', seq: 0, time: Date.parse('2026-11-26T10:00:00Z'),
+    data: { content: [{ type: 'text', text: quote }], role: 'user', source: { kind: 'user' } },
+  }) + '\n'
+  writeFileSync(sessionFile, zstdCompressSync(Buffer.from(body, 'utf8')))
+  const event = { id: 'ev-validity-locality', session: sessionId, idx: 0, quote, at: '2026-11-26', strength: 'strong' }
+  const signal = validity.signalKey(event)
+  const factsFile67 = join(dir, 'memory', 'facts.jsonl')
+  writeFileSync(factsFile67, [
+    { id: 'loc-1', text: '甲处办事要走西侧门', status: 'approved', channel: 'rel' },
+    { id: 'loc-2', text: '乙处办事要走东侧门', status: 'approved', channel: 'rel' },
+    { id: 'loc-not-injected', text: '丙处办事要走南门', status: 'approved', channel: 'rel' },
+  ].map((row) => JSON.stringify(row)).join('\n') + '\n')
+  corrections.writeEvents([event])
+  memory.writeState({ ...memory.readState(), injectedFactIds: ['loc-1', 'loc-2'] })
+  let state = (await call('GET', '/api/selfnote/state')).payload
+  const card = state.validity.cards.find((c) => c.key === signal)
+  assert.ok(card, '作废强信号应出卡（哪怕字面零重合）')
+  assert.equal(card.candidates.length, 2, '候选恰为本轮注入的两条')
+  assert.ok(card.candidates.some((i) => i.id === 'loc-1') && card.candidates.some((i) => i.id === 'loc-2'))
+  assert.equal(card.candidates.some((i) => i.id === 'loc-not-injected'), false, '没注入的第三条不进候选')
+  // 退役其中一条：那条退出 approved，数据仍可被检索，另一条仍在卡上
+  const res = await call('POST', '/api/selfnote/fact', { action: 'validity-retire', id: 'loc-1', signal })
+  assert.equal(res.status, 200)
+  state = (await call('GET', '/api/selfnote/state')).payload
+  assert.ok(!state.facts.approved.some((f) => f.id === 'loc-1'), '被点退役的那条退出已采纳')
+  assert.ok(state.facts.retired.some((f) => f.id === 'loc-1'), '数据留在已退役，不静默丢')
+  const card2 = state.validity.cards.find((c) => c.key === signal)
+  assert.ok(card2 && card2.candidates.some((i) => i.id === 'loc-2'), '另一条候选继续留在卡上')
+  console.log('67. 作废定位：字面零重合也按眼前注入事实出卡，退役一条其余仍在')
+}
+
+console.log('\n60 项全部通过（data dir: ' + dir + '）')
 
 process.exit(0)

@@ -19,7 +19,7 @@ const {
   VALIDITY_VERSION,
   signalKey,
   validityWeight,
-  findCandidates,
+  pickCandidates,
   buildValidityCards,
   readProcessedKeys,
   appendProcessedKeys,
@@ -39,23 +39,24 @@ assert.ok(validityWeight({ conflictWith: ['x'], similarTo: ['y'] }) >= 0.25)
 assert.equal(validityWeight({ conflictWith: [], similarTo: [] }), 1)
 console.log('1. validityWeight：0 → 1，1 档 → 0.7，2 档 → 0.49，且不低于下限')
 
-/* 2. 候选按相关度排序、去重、受 limit 约束 */
+/* 2. 候选只按眼前事实取：去重、限 N、剔除同 signal 已保留的那条，与作废句字面无关 */
 const facts = [
-  { id: 'addr-1', text: '旧地址是人民路 1 号，联系时用这个地址' },
-  { id: 'addr-1', text: '旧地址是人民路 1 号，联系时用这个地址' },
-  { id: 'note', text: '旧结论写在这里' },
-  { id: 'addr-2', text: '另一个地址在别处的旧说法' },
+  { id: 'f-1', text: '甲地办公的规矩记在这里' },
+  { id: 'f-1', text: '甲地办公的规矩记在这里' },
+  { id: 'f-2', text: '乙地办公的规矩记在这里' },
+  { id: 'f-3', text: '丙地办公的规矩记在这里' },
+  { id: 'f-4', text: '丁地办公的规矩记在这里' },
+  { id: 'f-5', text: '戊地办公的规矩记在这里' },
+  { id: 'f-6', text: '己地办公的规矩记在这里' },
 ]
-const candidates = findCandidates('别再提旧地址和旧结论了', facts, 3)
-assert.equal(candidates.length, 3)
-assert.deepEqual(new Set(candidates.map((item) => item.id)).size, 3, '候选按 id 去重')
-const firstAddress = candidates.findIndex((item) => item.id === 'addr-1')
-const firstNote = candidates.findIndex((item) => item.id === 'note')
-assert.ok(firstAddress !== -1 && firstNote !== -1 && firstAddress < firstNote, '含“地址”的候选排在含“结论”的无关条之前')
+// 函数签名只吃 facts / signal / limit，没有任何"作废句文本"参数 —— 候选与字面彻底解耦
+const candidates = pickCandidates(facts, 'sig-2', 5)
+assert.equal(candidates.length, 5, '最多取 limit 条')
+assert.equal(new Set(candidates.map((item) => item.id)).size, 5, '按 id 去重')
+assert.deepEqual(candidates.map((item) => item.id), ['f-1', 'f-2', 'f-3', 'f-4', 'f-5'], '按眼前事实顺序取前 N 条')
 assert.ok(candidates.every((item) => typeof item.id === 'string' && typeof item.text === 'string'))
-assert.equal(findCandidates('随便', facts, 2).length, 0, '零分不再兜底：无词元匹配时不硬凑候选')
-assert.equal(findCandidates('随便', facts, 0).length, 0)
-console.log('2. findCandidates：Top-N 排序、去重、limit 生效')
+assert.equal(pickCandidates(facts, 'sig-2', 0).length, 0, 'limit=0 返回空')
+console.log('2. pickCandidates：只按眼前事实去重限流，不看作废句字面')
 
 /* 3. 三重收敛 + 已处理台账：只有第一条原始信号出卡 */
 // s1=本人原话，s2=核回失败，s3=已处理，s4=强信号且核回成功但未处理的非本人来源。
@@ -100,7 +101,7 @@ assert.equal(cards[0].key, signalKey(events[0]))
 assert.equal(cards[0].quote, events[0].quote)
 assert.equal(cards[0].at, events[0].at)
 assert.equal(cards[0].source, 's1#34')
-assert.deepEqual(cards[0].candidates, findCandidates(events[0].quote, cardFacts))
+assert.deepEqual(cards[0].candidates, cardFacts.map(({ id, text }) => ({ id, text })), '候选恰为本轮眼前事实，与作废句字面无关')
 assert.deepEqual(checks, events.map((event) => ({ sessionId: event.session, seq: event.idx, quote: event.quote })))
 assert.deepEqual(provenanceCalls, [
   { role: 'user', text: events[0].quote },
@@ -160,7 +161,7 @@ assert.deepEqual(added.signal, signal)
 assert.equal(marked.fact.id, 'kept')
 console.log('6. markSignalHandled：只追加 signal history，不动 status / version / updated / retiredAt')
 
-/* 7. 同一信号点过「保留」的那条被剔除，其余候选还在；零分无关项不硬凑 */
+/* 7. 同一信号点过「保留」的那条被剔除，其余候选还在；无眼前事实不出卡 */
 const sig = 'sig-7'
 const withKept = [
   { id: 'kept-one', text: '旧地址是人民路 1 号', status: 'approved',
@@ -168,14 +169,22 @@ const withKept = [
   { id: 'live-one', text: '旧地址是人民路 1 号', status: 'approved', history: [] },
   { id: 'unrelated', text: '回答先给结论', status: 'approved', history: [] },
 ]
-const keptCandidates = findCandidates('别再提旧地址了', withKept, 5, sig)
-assert.deepEqual(keptCandidates.map((item) => item.id), ['live-one'], '保留过的那条不再列候选，其余相关条保留')
+const keptCandidates = pickCandidates(withKept, sig, 5)
+assert.deepEqual(keptCandidates.map((item) => item.id), ['live-one', 'unrelated'], '保留过的那条不再列候选，其余事实保留')
 // 换一个信号，之前保留过的那条仍可重新进候选（保留只对当前这句生效）
 assert.ok(
-  findCandidates('别再提旧地址了', withKept, 5, 'another-sig').some((item) => item.id === 'kept-one'),
+  pickCandidates(withKept, 'another-sig', 5).some((item) => item.id === 'kept-one'),
   '换信号后保留记录不生效'
 )
-console.log('7. findCandidates：保留过的候选按信号剔除；零分无关项不硬凑')
+// 本轮没有眼前事实时根本不出卡（不是出一张空卡）
+const noFactsCards = buildValidityCards({
+  events: [{ session: 's9', idx: 1, quote: '这条不算数了', at: '2026-11-26', strength: 'strong' }],
+  facts: [],
+  check: () => ({ ok: true, session: { id: 's9', date: '2026-11-26' }, record: { role: 'user', index: 1 } }),
+  provenance: () => 'own',
+})
+assert.deepEqual(noFactsCards, [], '无眼前事实 → 不出卡')
+console.log('7. pickCandidates：保留过的按信号剔除；无眼前事实不出卡')
 
 console.log('\n7 组全部通过（data dir: ' + dir + '）')
 process.exit(0)
