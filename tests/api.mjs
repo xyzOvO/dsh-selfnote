@@ -1245,11 +1245,8 @@ console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被
   let state = (await call('GET', '/api/selfnote/state')).payload
   assert.ok(state.validity && Array.isArray(state.validity.cards), 'state 要有 validity.cards')
   assert.deepEqual(state.validity.cards.map((card) => card.key), [signal1])
-  assert.equal(state.validity.cards[0].candidates.length, rows.length, '候选卡应带上候选事实')
-  assert.deepEqual(
-    state.validity.cards[0].candidates.map((item) => item.text).sort(),
-    rows.map((row) => row.text).sort(),
-  )
+  assert.ok(state.validity.cards[0].candidates.some((item) => item.id === 'validity-b'), '候选卡带上与信号相关的 validity-b（零分无关项不硬凑）')
+  assert.equal(state.validity.cards[0].candidates.some((item) => item.id === 'validity-free-a'), false, '零分无关项不进候选')
 
   const cfg = {
     ...config.currentConfig(),
@@ -1300,7 +1297,7 @@ console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被
   assert.equal(kept.history.at(-1).via, 'validity-kept')
   assert.equal(kept.history.at(-1).signal, signal1)
   state = (await call('GET', '/api/selfnote/state')).payload
-  assert.deepEqual(state.validity.cards.map((card) => card.key), [], '同一 signal 处理后不再出卡')
+  assert.ok(state.validity.cards.some((card) => card.key === signal1), 'keep 只移除那一条候选，不移除整张卡')
 
   writeFileSync(sessionFile, zstdCompressSync(Buffer.from(makeSessionBody(quote2), 'utf8')))
   corrections.writeEvents([event2])
@@ -1394,6 +1391,43 @@ console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被
   const key2 = probe.stdout.trim()
   assert.match(key2, /\|vld2$/, '改版本常量的副本要用新版本串')
   assert.notEqual(key2, key1, '版本串变化时缓存键必须失效')
+}
+
+/* 64. 作废卡处理粒度：退役一条候选，整卡和其余候选继续留着 */
+{
+  const validity = await import('../lib/validity.js')
+  const sessionId = 'session-validity-granularity'
+  const quote = '别再用旧话术和旧称呼'
+  const sessionDir = join(process.env.DSH_SESSIONS_DIR, 'proj', sessionId)
+  mkdirSync(sessionDir, { recursive: true })
+  const sessionFile = join(sessionDir, 'session.v4.jsonl.zstd')
+  const body = JSON.stringify({
+    type: 'user/message', seq: 0, time: Date.parse('2026-11-26T10:00:00Z'),
+    data: { content: [{ type: 'text', text: quote }], role: 'user', source: { kind: 'user' } },
+  }) + '\n'
+  writeFileSync(sessionFile, zstdCompressSync(Buffer.from(body, 'utf8')))
+  const event = { id: 'ev-validity-gran', session: sessionId, idx: 0, quote, at: '2026-11-26', strength: 'strong' }
+  const signal = validity.signalKey(event)
+  const factsFile = join(dir, 'memory', 'facts.jsonl')
+  const rows = [
+    { id: 'gran-a', text: '旧话术是有效的：旧话术是有效的', status: 'approved', channel: 'rel' },
+    { id: 'gran-b', text: '旧称呼是有效的：旧称呼是有效的', status: 'approved', channel: 'rel' },
+  ]
+  corrections.writeEvents([event])
+  writeFileSync(factsFile, rows.map((row) => JSON.stringify(row)).join('\n') + '\n')
+  let state = (await call('GET', '/api/selfnote/state')).payload
+  const card0 = state.validity.cards.find((card) => card.key === signal)
+  assert.ok(card0, '强信号应生成作废卡')
+  assert.ok(card0.candidates.some((item) => item.id === 'gran-a') && card0.candidates.some((item) => item.id === 'gran-b'), '两条相关事实都进候选')
+
+  const res = await call('POST', '/api/selfnote/fact', { action: 'validity-retire', id: 'gran-a', signal })
+  assert.equal(res.status, 200)
+  state = (await call('GET', '/api/selfnote/state')).payload
+  const card1 = state.validity.cards.find((card) => card.key === signal)
+  assert.ok(card1, '退役一条后整张卡还在，不是整卡消失')
+  assert.equal(card1.candidates.some((item) => item.id === 'gran-a'), false, '被退役那条从候选消失')
+  assert.ok(card1.candidates.some((item) => item.id === 'gran-b'), '未处理的候选继续留着')
+  console.log('64. 作废卡处理粒度：退役一条只移除那一条，整卡其余候选继续留着')
 }
 
 console.log('\n57 项全部通过（data dir: ' + dir + '）')

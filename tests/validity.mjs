@@ -43,17 +43,17 @@ console.log('1. validityWeight：0 → 1，1 档 → 0.7，2 档 → 0.49，且�
 const facts = [
   { id: 'addr-1', text: '旧地址是人民路 1 号，联系时用这个地址' },
   { id: 'addr-1', text: '旧地址是人民路 1 号，联系时用这个地址' },
-  { id: 'note', text: '以后回答先给结论' },
-  { id: 'addr-2', text: '另一个地址在别处' },
+  { id: 'note', text: '旧结论写在这里' },
+  { id: 'addr-2', text: '另一个地址在别处的旧说法' },
 ]
-const candidates = findCandidates('别再提那个旧地址了', facts, 3)
+const candidates = findCandidates('别再提旧地址和旧结论了', facts, 3)
 assert.equal(candidates.length, 3)
 assert.deepEqual(new Set(candidates.map((item) => item.id)).size, 3, '候选按 id 去重')
 const firstAddress = candidates.findIndex((item) => item.id === 'addr-1')
 const firstNote = candidates.findIndex((item) => item.id === 'note')
-assert.ok(firstAddress !== -1 && firstNote !== -1 && firstAddress < firstNote, '含“地址”的候选排在无关条之前')
+assert.ok(firstAddress !== -1 && firstNote !== -1 && firstAddress < firstNote, '含“地址”的候选排在含“结论”的无关条之前')
 assert.ok(candidates.every((item) => typeof item.id === 'string' && typeof item.text === 'string'))
-assert.equal(findCandidates('随便', facts, 2).length, 2)
+assert.equal(findCandidates('随便', facts, 2).length, 0, '零分不再兜底：无词元匹配时不硬凑候选')
 assert.equal(findCandidates('随便', facts, 0).length, 0)
 console.log('2. findCandidates：Top-N 排序、去重、limit 生效')
 
@@ -160,5 +160,22 @@ assert.deepEqual(added.signal, signal)
 assert.equal(marked.fact.id, 'kept')
 console.log('6. markSignalHandled：只追加 signal history，不动 status / version / updated / retiredAt')
 
-console.log('\n6 组全部通过（data dir: ' + dir + '）')
+/* 7. 同一信号点过「保留」的那条被剔除，其余候选还在；零分无关项不硬凑 */
+const sig = 'sig-7'
+const withKept = [
+  { id: 'kept-one', text: '旧地址是人民路 1 号', status: 'approved',
+    history: [{ at: '2026-11-26T00:00:00.000Z', from: null, to: null, via: 'validity-kept', signal: sig }] },
+  { id: 'live-one', text: '旧地址是人民路 1 号', status: 'approved', history: [] },
+  { id: 'unrelated', text: '回答先给结论', status: 'approved', history: [] },
+]
+const keptCandidates = findCandidates('别再提旧地址了', withKept, 5, sig)
+assert.deepEqual(keptCandidates.map((item) => item.id), ['live-one'], '保留过的那条不再列候选，其余相关条保留')
+// 换一个信号，之前保留过的那条仍可重新进候选（保留只对当前这句生效）
+assert.ok(
+  findCandidates('别再提旧地址了', withKept, 5, 'another-sig').some((item) => item.id === 'kept-one'),
+  '换信号后保留记录不生效'
+)
+console.log('7. findCandidates：保留过的候选按信号剔除；零分无关项不硬凑')
+
+console.log('\n7 组全部通过（data dir: ' + dir + '）')
 process.exit(0)
