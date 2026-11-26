@@ -291,13 +291,23 @@ console.log('15. memoryStats 数字对得上')
   assert.equal(memory.readFacts().find((f) => f.id === deadOldId).history.length, histBefore, '目标已退役时不重复写取代痕迹')
   console.log('18d. 目标已退役 → 跳过让位，不重复留痕')
 
+  // 自指防御：mergeSuggestion 指向自己时不能把自己取代掉
+  const selfRef = memory.stageFact({ text: '自指候选：别把自己当旧值。', citation: { sessionId: 'session-aaaa', index: 2 } })
+  const selfRefId = selfRef.fact.id
+  memory.writeFacts(memory.readFacts().map((f) => f.id === selfRefId ? { ...f, mergeSuggestion: selfRefId } : f))
+  assert.equal(memory.setFactStatus(selfRefId, 'approved').ok, true)
+  const selfAfter = memory.readFacts().find((f) => f.id === selfRefId)
+  assert.equal(selfAfter.status, 'approved', '自指 mergeSuggestion 不能让采纳项把自己取代')
+  assert.equal('supersededBy' in selfAfter, false, '自指不该留下被取代标记')
+  console.log('18e. 自指 mergeSuggestion 被忽略，采纳项保持 approved')
+
   // 检索放宽：retired 能被 searchFacts 查到，candidate 仍排除
   const retiredOnly = memory.stageFact({ text: '一个被退役的独有词 ZQX。', citation: { sessionId: 'session-aaaa', index: 1 } })
   memory.setFactStatus(retiredOnly.fact.id, 'retired')
   assert.equal(memory.searchFacts('ZQX').hits.some((f) => f.id === retiredOnly.fact.id), true, 'retired 应可检索')
   const cand = memory.stageFact({ text: '一个候选的独有词 YYY。', citation: { sessionId: 'session-aaaa', index: 1 } })
   assert.equal(memory.searchFacts('YYY').hits.some((f) => f.id === cand.fact.id), false, 'candidate 不应进检索')
-  console.log('18e. retired 可查、candidate 不进检索')
+  console.log('18f. retired 可查、candidate 不进检索')
 }
 
 console.log('\n18 项全部通过')
