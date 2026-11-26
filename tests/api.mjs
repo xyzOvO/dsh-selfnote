@@ -1278,7 +1278,7 @@ console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被
   assert.equal(last.via, 'validity')
   assert.equal(last.signal, signal1)
   assert.equal(config.assembleInjection(cfg).text.includes('旧话术是有效的'), false, '退役后要从注入消失')
-  assert.equal(memory.searchFacts('旧话术').hits.some((fact) => fact.id === 'validity-b'), false, '退役后不再当 approved 事实召回')
+  assert.equal(memory.searchFacts('旧话术').hits.some((fact) => fact.id === 'validity-b'), true, '退役后仍可被温层检索查到（不静默丢数据），只是不进注入')
 
   res = await call('POST', '/api/selfnote/fact', { id: 'validity-b', status: 'approved' })
   assert.equal(res.status, 200)
@@ -1430,6 +1430,32 @@ console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被
   console.log('64. 作废卡处理粒度：退役一条只移除那一条，整卡其余候选继续留着')
 }
 
-console.log('\n57 项全部通过（data dir: ' + dir + '）')
+/* 65. 取代指针端到端：采纳重复候选 → 旧值退检索但进 retired 带标记 → 可查 → 可恢复 */
+{
+  writeFileSync(factsFile, [
+    { id: 'sup-old', text: '旧位置在老地址', status: 'approved', channel: 'rel', version: 1 },
+    { id: 'sup-new', text: '新位置在新地址', status: 'candidate', channel: 'rel', version: 1, mergeSuggestion: 'sup-old' },
+  ].map((row) => JSON.stringify(row)).join('\n') + '\n')
+  let res = await call('POST', '/api/selfnote/fact', { id: 'sup-new', status: 'approved' })
+  assert.equal(res.status, 200)
+  let state = (await call('GET', '/api/selfnote/state')).payload
+  assert.ok(!state.facts.approved.some((f) => f.id === 'sup-old'), '旧值退出已采纳')
+  assert.ok(state.facts.retired.some((f) => f.id === 'sup-old' && f.supersededBy === 'sup-new'), '旧值进已退役且带取代标记')
+  assert.ok(state.facts.approved.some((f) => f.id === 'sup-new'), '新值在已采纳')
+  // 退役值仍可被 memory_search 查到（searchFacts 放宽生效）
+  const searchTool = toolHold.find((tool) => tool.name === 'memory_search')
+  assert.ok(searchTool, '要有 memory_search 工具')
+  const search = await searchTool.execute({ query: '老地址' })
+  assert.ok(JSON.stringify(search).includes('sup-old'), '退役值可被检索')
+  // 恢复：回到 approved 且清掉取代标记
+  res = await call('POST', '/api/selfnote/fact', { id: 'sup-old', status: 'approved' })
+  assert.equal(res.status, 200)
+  const st2 = (await call('GET', '/api/selfnote/state')).payload
+  assert.ok(st2.facts.approved.some((f) => f.id === 'sup-old'), '恢复后旧值回到已采纳')
+  assert.equal(st2.facts.approved.find((f) => f.id === 'sup-old')?.supersededBy, undefined, '恢复后无取代标记')
+  console.log('65. 取代指针端到端：让位→可查→恢复全链路通')
+}
+
+console.log('\n58 项全部通过（data dir: ' + dir + '）')
 
 process.exit(0)
