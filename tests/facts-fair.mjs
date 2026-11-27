@@ -108,4 +108,20 @@ assert.ok(
 )
 console.log('6. 设置页预算口径与真注入一致')
 
+/* 7. 门牌收敛不得换掉冷门兜底选中的长条目：
+   旧逻辑收敛只看 skipped 数量；门牌轮 fitLimit 变小后预留位装不下长冷条目，
+   它被热条目顶替、但 skipped 仍是 1 条 → 数量相同被误判为收敛通过。
+   夹具与实测同构：longCold（49字、无 lastHit）初始靠预留位进来，门牌轮应被换掉。 */
+const hotTop = '结论庚辛' + '壬'.repeat(30)        // 34 字，最热
+const midKeep = '留痕丁戊' + '己'.repeat(24)       // 28 字，次热
+const longCold = '对外文本甲乙' + '丙'.repeat(43)  // 49 字，最冷、无 lastHit
+writeRelFacts([
+  { id: 'top', text: hotTop, hitCount: 20, lastHit: stamp(-1000) },
+  { id: 'mid', text: midKeep, hitCount: 10, lastHit: stamp(-1000) },
+  { id: 'cold', text: longCold, hitCount: 1 },
+])
+const doorplate = boot().text()
+assert.ok(doorplate.includes(longCold), '门牌收敛不得换掉冷门兜底选中的长条目')
+console.log('7. 门牌收敛不换掉冷门选择')
+
 console.log('\nfacts-fair 全部通过')
