@@ -511,6 +511,18 @@ buttonIn(findByClass(dupTree, 'sn-ops-skipped')[0], '改这条').props.onClick()
 dupTree = rerender()
 assert.ok(treeText(findByClass(dupTree, 'sn-ops-skipped')[0]).includes('选一条'), '多命中要列候选让人选')
 assert.equal(fetchCalls.length, beforeDup, '多命中不能自动发 POST')
+// 点候选后进入编辑态、改字、提交——完整链路（复审 Minor 缺口）
+const pickBtn = findButtons(findByClass(dupTree, 'sn-ops-skipped')[0]).find(function (b) { return treeText(b).includes('同文规则甲乙') })
+assert.ok(pickBtn, '候选按钮要能点到')
+pickBtn.props.onClick()
+dupTree = rerender()
+const dupInput = findInputs(findByClass(dupTree, 'sn-ops-skipped')[0])[0]
+assert.ok(dupInput, '点候选后要展开输入框')
+dupInput.props.onChange({ target: { value: '选定的新正文' } })
+dupTree = rerender()
+buttonIn(findByClass(dupTree, 'sn-ops-skipped')[0], '改好了').props.onClick()
+await settle()
+assert.deepEqual(JSON.parse(fetchCalls[fetchCalls.length - 1].init.body), { id: 'd1', text: '选定的新正文' }, '候选走完整链路改第一条')
 
 // A 区零命中：提示去设置页，不发 POST
 const zeroState = {
@@ -524,7 +536,7 @@ let zeroTree = await renderConfirmFresh(zeroState, '')
 const beforeZero = fetchCalls.length
 buttonIn(findByClass(zeroTree, 'sn-ops-skipped')[0], '改这条').props.onClick()
 zeroTree = rerender()
-assert.ok(treeText(zeroTree).includes('没找到对应的记忆'), '零命中要提示')
+assert.ok(treeText(zeroTree).includes('这条不在最近记录里'), '零命中要提示')
 assert.equal(fetchCalls.length, beforeZero, '零命中不发 POST')
 
 // B 区：空草稿被拦，非空才发 POST
