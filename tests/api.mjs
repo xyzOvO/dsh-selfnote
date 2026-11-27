@@ -1363,7 +1363,7 @@ console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被
   const key1 = config.injectionKey(cfg)
   const validity = await import('../lib/validity.js')
   assert.ok(String(key1).endsWith(config.algorithmKeyForCache()), '缓存键末尾要有有效性版本串')
-  assert.equal(config.algorithmKeyForCache(), '|vld' + validity.VALIDITY_VERSION)
+  assert.equal(config.algorithmKeyForCache(), '|vld' + validity.VALIDITY_VERSION + '|fpack1')
 
   const copyRoot = join(dir, 'validity-version-copy')
   mkdirSync(copyRoot, { recursive: true })
@@ -1392,7 +1392,7 @@ console.log('57. 半衰期/画像上限/纠偏游标都在 state 里，越界被
   })
   assert.equal(probe.status, 0, probe.stderr)
   const key2 = probe.stdout.trim()
-  assert.match(key2, /\|vld2$/, '改版本常量的副本要用新版本串')
+  assert.match(key2, /\|vld2\|fpack1$/, '改版本常量的副本要用新版本串，冷门兜底版本串在末尾')
   assert.notEqual(key2, key1, '版本串变化时缓存键必须失效')
 }
 
