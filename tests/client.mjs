@@ -435,6 +435,19 @@ assert.equal(findValidityCards(confirmTree).length, 0, '空 cards 不该渲染�
 assert.ok(!treeText(confirmTree).includes('这几条都不处理'), '空 cards 不打扰')
 console.log('13. 疑似作废卡静默渲染，三类动作与空态都正确')
 
+/* ---------- 侧栏确认页：常驻操作折叠区 ---------- */
+confirmTree = await renderConfirmFresh(
+  { facts: { candidates: [], approved: [], retired: [] }, validity: { cards: [] }, injection: { segments: [] } }, '')
+assert.ok(treeText(confirmTree).includes('没进注入的'), '空态也要有折叠区A')
+assert.ok(treeText(confirmTree).includes('已记住的'), '空态也要有折叠区B')
+assert.ok(treeText(confirmTree).includes('已退役的'), '空态也要有折叠区C')
+const opsDetails = []
+walkTree(confirmTree, function (n) { if (n.type === 'details') opsDetails.push(n) })
+assert.ok(opsDetails.length >= 3, '三个折叠区都是原生 details')
+assert.ok(opsDetails.every(function (d) { return !d.props || !d.props.open }), '折叠区默认收起')
+assert.ok(!treeText(confirmTree).includes('左下角齿轮 → AI 记忆 → 记忆'), '旧空态指引已删')
+console.log('14. 空态也常驻三个折叠区，默认收起，旧齿轮指引已删')
+
 /* ---------- 页签内跳过提醒 ---------- */
 let sState, sTab, sIdx, sSetters
 const ReactSettings = {

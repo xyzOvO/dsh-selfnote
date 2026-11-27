@@ -24,7 +24,7 @@ assert.match(src, /名词速查/, 'intro 要有名词速查，消除术语墙')
 assert.ok(!src.includes('人格（自述）'), '入口名要统一改成「AI 记忆」，不留旧名')
 assert.match(src, /h\('div',\s*\{\s*className: 'sn-title'\s*\},\s*'AI 记忆'\)/, '设置页主标题要叫 AI 记忆')
 assert.match(src, /return 'AI 记忆'/, '侧栏入口 label 要叫 AI 记忆')
-assert.match(src, /左下角齿轮 → AI 记忆 → 记忆/, '侧栏空态指引要用新入口名')
+assert.match(src, /更多操作在下方/, '侧栏空态指引改成常驻折叠区')
 // 精确切出关系卡那段 h('details', {...}, ...) 的属性对象，确认没有 open:true（默认折叠）
 const relAt = src.indexOf("className: 'sn-card sn-relations'")
 assert.ok(relAt > 0, '关系记忆卡要包在 details 里')
