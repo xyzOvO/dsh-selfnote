@@ -126,6 +126,12 @@ assert.ok(styles[0].textContent.length > 1500, 'CSS 太短，可能没加载全'
   assert.match(m[0], /box-sizing:\s*border-box/, 'padding 要计入高度，避免溢出窗口')
   assert.match(m[0], /height:\s*100%|max-height:/, '要有高度约束，光有 overflow-y 也滚不起来')
 }
+{
+  const noticeRule = styles[0].textContent.match(/\.sn-confirm \.sn-notice\{[^}]*\}/)
+  assert.ok(noticeRule, '确认页提示要有独立的吸顶样式，否则在下方操作时看不见')
+  assert.match(noticeRule[0], /position:\s*sticky/, '提示要吸顶，滚动到下方操作时反馈也看得见')
+  assert.match(noticeRule[0], /z-index:/, '提示要浮在内容之上，不被卡片盖住')
+}
 dispose()
 assert.equal(styles[0].removed, true)
 console.log('1. slot 注册、label、CSS 注入与清理都正常（CSS ' + styles[0].textContent.length + ' 字符）')
