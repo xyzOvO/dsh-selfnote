@@ -108,4 +108,4 @@ assert.ok(
 )
 console.log('6. 设置页预算口径与真注入一致')
 
-console.log('\\nfacts-fair 全部通过')
+console.log('\nfacts-fair 全部通过')
