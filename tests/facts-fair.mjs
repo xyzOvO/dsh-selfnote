@@ -124,4 +124,12 @@ const doorplate = boot().text()
 assert.ok(doorplate.includes(longCold), '门牌收敛不得换掉冷门兜底选中的长条目')
 console.log('7. 门牌收敛不换掉冷门选择')
 
+/* 8. 方案A的契约：门牌只附一次、附在事实行末尾、不随收敛轮数累积。
+   锁住这条就锁住了「超支只来自单个门牌、不会无界增长」——比写死字数上界更稳。 */
+const plates = doorplate.match(/另有 \d+ 条结论（memory_recall 查）/g) || []
+assert.equal(plates.length, 1, '门牌只附一次，不随收敛轮数累积')
+const plateLine = doorplate.split('\n').find((line) => line.includes(plates[0]))
+assert.ok(plateLine.trimEnd().endsWith(plates[0]), '门牌附在事实行末尾')
+console.log('8. 门牌只附一次且在段尾')
+
 console.log('\nfacts-fair 全部通过')
