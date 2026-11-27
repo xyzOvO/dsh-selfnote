@@ -448,6 +448,108 @@ assert.ok(opsDetails.every(function (d) { return !d.props || !d.props.open }), '
 assert.ok(!treeText(confirmTree).includes('左下角齿轮 → AI 记忆 → 记忆'), '旧空态指引已删')
 console.log('14. 空态也常驻三个折叠区，默认收起，旧齿轮指引已删')
 
+/* ---------- 侧栏确认页：折叠区内三个动作 ---------- */
+function findByClass(root, cls) {
+  const out = []
+  walkTree(root, function (n) {
+    if (n.props && typeof n.props.className === 'string' && n.props.className.indexOf(cls) >= 0) out.push(n)
+  })
+  return out
+}
+function findInputs(root) {
+  const out = []
+  walkTree(root, function (n) { if (n.type === 'input') out.push(n) })
+  return out
+}
+function buttonIn(root, label) {
+  return findButtons(root).find(function (b) { return treeText(b).includes(label) })
+}
+
+// A 区唯一命中：skipped preview 精确命中某 approved 事实 → 展开预填输入框 → 改正文发 POST
+fetchMode = 'ok'
+const opsState = {
+  facts: {
+    candidates: [],
+    approved: [{ id: 'f1', text: '中文正常说，不硬缩' }],
+    retired: [{ id: 'f3', text: '旧规则已退役' }],
+  },
+  validity: { cards: [] },
+  injection: { segments: [{ key: 'facts', label: '结论', skippedDetail: [
+    { id: 'facts:abc', preview: '中文正常说，不硬缩', reason: 'budget' },
+  ] }] },
+}
+let opsTree = await renderConfirmFresh(opsState, '')
+const aBtn = buttonIn(findByClass(opsTree, 'sn-ops-skipped')[0], '改这条')
+assert.ok(aBtn, 'A 区要有「改这条」按钮')
+aBtn.props.onClick()
+opsTree = rerender()
+const aInput = findInputs(findByClass(opsTree, 'sn-ops-skipped')[0])[0]
+assert.ok(aInput, '点改这条后要展开输入框')
+assert.equal(aInput.props.value, '中文正常说，不硬缩', '输入框预填命中事实原文')
+aInput.props.onChange({ target: { value: '中文照常说' } })
+opsTree = rerender()
+assert.equal(findInputs(findByClass(opsTree, 'sn-ops-skipped')[0])[0].props.value, '中文照常说', '草稿写入后可重渲染')
+buttonIn(findByClass(opsTree, 'sn-ops-skipped')[0], '改好了').props.onClick()
+await settle()
+let opsPost = fetchCalls[fetchCalls.length - 1]
+assert.ok(opsPost.url.endsWith('/fact'), '改正文发往 /fact')
+assert.deepEqual(JSON.parse(opsPost.init.body), { id: 'f1', text: '中文照常说' })
+
+// A 区多命中：两条 approved 同文 → 列候选让人选，不自动发 POST
+const dupState = {
+  facts: { candidates: [], approved: [
+    { id: 'd1', text: '同文规则甲乙' }, { id: 'd2', text: '同文规则甲乙' },
+  ], retired: [] },
+  validity: { cards: [] },
+  injection: { segments: [{ key: 'facts', label: '结论', skippedDetail: [
+    { id: 'facts:xyz', preview: '同文规则甲乙', reason: 'budget' },
+  ] }] },
+}
+let dupTree = await renderConfirmFresh(dupState, '')
+const beforeDup = fetchCalls.length
+buttonIn(findByClass(dupTree, 'sn-ops-skipped')[0], '改这条').props.onClick()
+dupTree = rerender()
+assert.ok(treeText(findByClass(dupTree, 'sn-ops-skipped')[0]).includes('选一条'), '多命中要列候选让人选')
+assert.equal(fetchCalls.length, beforeDup, '多命中不能自动发 POST')
+
+// A 区零命中：提示去设置页，不发 POST
+const zeroState = {
+  facts: { candidates: [], approved: [{ id: 'f1', text: '完全不同的内容' }], retired: [] },
+  validity: { cards: [] },
+  injection: { segments: [{ key: 'facts', label: '结论', skippedDetail: [
+    { id: 'facts:zzz', preview: '找不到的预览', reason: 'budget' },
+  ] }] },
+}
+let zeroTree = await renderConfirmFresh(zeroState, '')
+const beforeZero = fetchCalls.length
+buttonIn(findByClass(zeroTree, 'sn-ops-skipped')[0], '改这条').props.onClick()
+zeroTree = rerender()
+assert.ok(treeText(zeroTree).includes('没找到对应的记忆'), '零命中要提示')
+assert.equal(fetchCalls.length, beforeZero, '零命中不发 POST')
+
+// B 区：空草稿被拦，非空才发 POST
+let bTree = await renderConfirmFresh(opsState, '')
+buttonIn(findByClass(bTree, 'sn-ops-approved')[0], '改文字').props.onClick()
+bTree = rerender()
+findInputs(findByClass(bTree, 'sn-ops-approved')[0])[0].props.onChange({ target: { value: '   ' } })
+bTree = rerender()
+const beforeBlank = fetchCalls.length
+buttonIn(findByClass(bTree, 'sn-ops-approved')[0], '改好了').props.onClick()
+await settle()
+assert.equal(fetchCalls.length, beforeBlank, '空草稿不发 POST')
+findInputs(findByClass(bTree, 'sn-ops-approved')[0])[0].props.onChange({ target: { value: '新正文' } })
+bTree = rerender()
+buttonIn(findByClass(bTree, 'sn-ops-approved')[0], '改好了').props.onClick()
+await settle()
+assert.deepEqual(JSON.parse(fetchCalls[fetchCalls.length - 1].init.body), { id: 'f1', text: '新正文' })
+
+// C 区：恢复发 status:'approved'
+let cTree = await renderConfirmFresh(opsState, '')
+buttonIn(findByClass(cTree, 'sn-ops-retired')[0], '恢复').props.onClick()
+await settle()
+assert.deepEqual(JSON.parse(fetchCalls[fetchCalls.length - 1].init.body), { id: 'f3', status: 'approved' })
+console.log('15. 折叠区三动作：精确改正文/多命中消歧/零命中/空草稿拦截/恢复')
+
 /* ---------- 页签内跳过提醒 ---------- */
 let sState, sTab, sIdx, sSetters
 const ReactSettings = {
