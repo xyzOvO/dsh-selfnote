@@ -1,10 +1,10 @@
 /**
- * 防马太效应：结论段冷门兜底 + 缓存版本串。
+ * 防马太效应：结论段冷门兜底 + 缓存版本串 + 设置页同口径。
  * 跑法：node tests/facts-fair.mjs
  */
 
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -17,9 +17,10 @@ const memory = await import('../lib/memory.js')
 const index = await import('../lib/index.js')
 
 const stamp = (offsetMs = 0) => new Date(Date.now() + offsetMs).toISOString()
-// 热条目：吃满预算的长文本；冷条目：短、从没进过
-const hotText = (i) => '热点' + i + '甲'.repeat(34)
-const coldText = (i) => '冷门' + i
+// 热条目：各 32 字，两条就吃满 base 的预留后预算；冷 A 12 字（最近进过）、冷 B 20 字（从没进过）
+const hotText = (i) => '热点' + String(i).padStart(2, '0') + '甲'.repeat(28)
+const coldAText = '冷门甲' + '乙'.repeat(9)
+const coldBText = '冷门乙' + '丙'.repeat(17)
 
 function writeRelFacts(rows) {
   writeFileSync(
@@ -76,25 +77,35 @@ assert.ok(index.algorithmKeyForCache().includes('fpack1'), 'algorithmKeyForCache
 assert.ok(index.injectionKey(cfg).includes('fpack1'), 'injectionKey 必须含 fpack1')
 console.log('3. 缓存串含 fpack1')
 
-/* 4. 端到端冷门兜底：热条目吃满预算，从没进过的短条目仍能拿到预留位 */
+/* 4. 端到端冷门兜底（有区分力）：
+   旧 packFacts 按热度装，冷 B（20 字）会被挤掉；packFactsFair 因冷 B 从没进过（lastHit=0）
+   把它排进冷门预留位，冷 B 一定进得来。断言只锁 coldB，不写 coldA||coldB 那种恒真条件。 */
 writeRelFacts([
   { id: 'hot0', text: hotText(0), hitCount: 99, lastHit: stamp(-1000) },
   { id: 'hot1', text: hotText(1), hitCount: 99, lastHit: stamp(-1000) },
   { id: 'hot2', text: hotText(2), hitCount: 99, lastHit: stamp(-1000) },
-  { id: 'coldA', text: coldText('A'), hitCount: 0 },
-  { id: 'coldB', text: coldText('B'), hitCount: 0 },
+  { id: 'coldA', text: coldAText, hitCount: 0, lastHit: stamp(-1000) },
+  { id: 'coldB', text: coldBText, hitCount: 0 },
 ])
 const s = boot()
 const first = s.text()
 assert.ok(first.includes(hotText(0)), '热条目仍在注入')
-assert.ok(first.includes(coldText('A')) || first.includes(coldText('B')), '从没进过的冷条目必须有人进得来')
-console.log('4. 冷门条目拿到预留位（热条目仍在）')
+assert.ok(first.includes(coldBText), '从没进过的冷条目 coldB 必须拿到预留位')
+console.log('4. 冷门 coldB 拿到预留位（热条目仍在）')
 
 /* 5. 退役残余：冷条目退役后不再进注入 */
 const rows = memory.readFacts()
-writeRelFacts(rows.map((row) => row.id === 'coldA' ? { ...row, status: 'retired', retiredAt: '2026-11-27' } : row))
+writeRelFacts(rows.map((row) => row.id === 'coldB' ? { ...row, status: 'retired', retiredAt: '2026-11-27' } : row))
 const afterRetire = boot().text()
-assert.ok(!afterRetire.includes(coldText('A')), '退役冷条目不得进注入')
+assert.ok(!afterRetire.includes(coldBText), '退役冷条目不得进注入')
 console.log('5. 退役冷条目残余为 0')
 
-console.log('\nfacts-fair 全部通过')
+/* 6. 设置页口径：budgetOf 必须和真注入同走 packFactsFair，否则设置页字数与真注入对不上 */
+const indexSrc = readFileSync(new URL('../lib/index.js', import.meta.url), 'latin1')
+assert.ok(
+  /factsSegment\(factsForInjection\(cfg\), BUDGET\.facts, packFactsFair\)\.text/.test(indexSrc),
+  '设置页 budgetOf 必须把 packFactsFair 传给 factsSegment，与真注入同口径',
+)
+console.log('6. 设置页预算口径与真注入一致')
+
+console.log('\\nfacts-fair 全部通过')

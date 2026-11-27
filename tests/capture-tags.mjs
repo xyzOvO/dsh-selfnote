@@ -22,7 +22,10 @@ assert.deepEqual(capture.tagsForTriggers([]), [])
 assert.deepEqual(capture.tagsForTriggers(['standing', 'standing']), ['长期约定'])
 assert.deepEqual(capture.tagsForTriggers(['unknown']), [])
 assert.deepEqual(capture.tagsForTriggers(['prefer', 'standing', 'correct']), ['偏好', '长期约定', '纠正要求'])
-console.log('1. tagsForTriggers：分类映射 + 去重 + 顺序 + 过滤未知')
+assert.deepEqual(capture.tagsForTriggers(null), [], '非数组 null → 空')
+assert.deepEqual(capture.tagsForTriggers(undefined), [], '非数组 undefined → 空')
+assert.deepEqual(capture.tagsForTriggers({}), [], '非数组对象 → 空')
+console.log('1. tagsForTriggers：分类映射 + 去重 + 顺序 + 过滤未知 + 非数组兜底')
 
 /* 2. 集成：一条 standing 规则句 → 新 fact.tags[0] 为长期约定 */
 const standing = run.planWrites(['以后回答都用中文']
