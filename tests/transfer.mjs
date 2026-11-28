@@ -5,7 +5,7 @@ import { buildBundle, mergeBundle, validateBundle, mergePersona, BUNDLE_VERSION 
 const bundle = buildBundle({
   notes: [{ date: '2026-11-03', text: '做插件先让它能跑' }],
   facts: [
-    { id: 'f1', text: '以后回答先给结论', status: 'approved', hitCount: 3 },
+    { id: 'f1', text: '以后回答先报数字', status: 'approved', hitCount: 3 },
     { id: 'f2', text: '本机 node 在 D:\\nodejs', status: 'approved', channel: 'env' },
   ],
   habits: [{ text: '收到要回收到', status: 'active', tag: '沟通' }],
@@ -34,7 +34,7 @@ console.log('2. 校验：坏文件当场拒绝，不静默合并')
 const current = {
   notes: [{ date: '2026-11-01', text: '旧的一条' }],
   facts: [
-    { id: 'f1', text: '以后回答先给结论', status: 'approved' },
+    { id: 'f1', text: '以后回答先报数字', status: 'approved' },
     { id: 'f3', text: '索引只存词元', status: 'approved' },
   ],
   habits: [],
@@ -101,11 +101,11 @@ const withPersona = buildBundle({
   facts: [],
   habits: [],
   config: { heading: '记忆（我写的）', personaEnabled: false, tempTtlDays: 21, 内部字段: '不该带出去' },
-  persona: { l0: '我是鲸鲸。', l1: '回答先给结论。', l2: '外套深蓝。' },
+  persona: { l0: '我是小舟。', l1: '回答先报数字。', l2: '灰色外套。' },
   now: new Date('2026-11-05T00:00:00Z'),
 })
 assert.equal(withPersona.v, 2, '带人格的包是 v2')
-assert.deepEqual(withPersona.persona, { l0: '我是鲸鲸。', l1: '回答先给结论。', l2: '外套深蓝。' })
+assert.deepEqual(withPersona.persona, { l0: '我是小舟。', l1: '回答先报数字。', l2: '灰色外套。' })
 assert.equal(withPersona.config.personaEnabled, false, '人格开关要跟着走')
 assert.equal(withPersona.config.tempTtlDays, 21, '临时保质期也要跟着走')
 assert.equal(withPersona.config.内部字段, undefined)
@@ -124,15 +124,15 @@ console.log('10. 校验：老包照收，坏人格当场拒绝')
 /* 11. 人格合并：空了不写、目标空就用导入的、同上跳过、不同不覆盖 */
 assert.deepEqual(mergePersona(null, null), { action: 'none' })
 assert.deepEqual(mergePersona({ l0: '  ', l1: '', l2: '' }, null), { action: 'none' }, '全空等于没带')
-assert.deepEqual(mergePersona({ l0: '我是鲸鲸。', l1: '', l2: '' }, null), {
+assert.deepEqual(mergePersona({ l0: '我是小舟。', l1: '', l2: '' }, null), {
   action: 'adopt',
-  persona: { l0: '我是鲸鲸。', l1: '', l2: '' },
+  persona: { l0: '我是小舟。', l1: '', l2: '' },
 })
-const samePersona = mergePersona({ l0: '我是鲸鲸。', l1: 'a', l2: '' }, { l0: '我是鲸鲸。', l1: 'a', l2: '' })
+const samePersona = mergePersona({ l0: '我是小舟。', l1: 'a', l2: '' }, { l0: '我是小舟。', l1: 'a', l2: '' })
 assert.equal(samePersona.action, 'same', '一模一样就别再写一遍盘')
-const clash = mergePersona({ l0: '我是鲸鲸。', l1: 'b', l2: '' }, { l0: '我是鲸鲸。', l1: 'a', l2: '' })
+const clash = mergePersona({ l0: '我是小舟。', l1: 'b', l2: '' }, { l0: '我是小舟。', l1: 'a', l2: '' })
 assert.equal(clash.action, 'conflict', '两边都有人格且不一样：不许覆盖')
-assert.deepEqual(clash.persona, { l0: '我是鲸鲸。', l1: 'b', l2: '' }, '冲突时把导入的那份原样带回去落旁路文件')
+assert.deepEqual(clash.persona, { l0: '我是小舟。', l1: 'b', l2: '' }, '冲突时把导入的那份原样带回去落旁路文件')
 console.log('11. 人格合并：不覆盖，冲突留给旁路文件')
 
 console.log('\n11 项全部通过')

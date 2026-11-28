@@ -84,7 +84,7 @@ assert.equal(state.reasons['not-user-authored'], 1, '非人类消息要落到 no
 emit({
   type: 'user/message',
   seq: 3,
-  data: { source: { kind: 'user' }, content: '以后回复都先给结论，别写一大段英文' },
+  data: { source: { kind: 'user' }, content: '以后回复都先报数字，别写一大段英文' },
 })
 await settle()
 state = (await call('GET', '/api/selfnote/capture')).body

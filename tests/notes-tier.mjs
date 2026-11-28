@@ -42,7 +42,7 @@ console.log('1. 行格式来回一致（认不出的标记不吞正文）')
 /* ---------------- 2. 写入：类型存得下、改正文不丢类型 ---------------- */
 
 store.writeNotes([])
-store.appendNote('我是大肥鱼', {}, { tier: 'core' })
+store.appendNote('我是样例鱼', {}, { tier: 'core' })
 store.appendNote('别喊我肥鱼', {}, { tier: 'stable', pin: true })
 store.appendNote('今晚早睡', {}, { tier: 'temp' })
 assert.deepEqual(
@@ -57,7 +57,7 @@ assert.ok(raw.includes('[稳定*] '), 'pin 要能一眼看出来')
 store.setNoteMeta(2, { pin: true })
 assert.equal(store.readNotes()[2].tier, 'temp', '只改 pin 不该动类型')
 assert.equal(store.readNotes()[2].pin, true)
-store.updateNote(0, '我是大肥鱼，改一下')
+store.updateNote(0, '我是样例鱼，改一下')
 assert.equal(store.readNotes()[0].tier, 'core', '改正文不该把核心身份偷偷降级')
 console.log('2. 类型随写入落盘，改正文保留原类型')
 

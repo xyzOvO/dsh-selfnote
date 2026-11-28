@@ -54,7 +54,7 @@ console.log('47. 标记消费：不同 txId 冲突不覆盖，同 txId 幂等')
 
 const fpA = tx.ruleFingerprint('- 回答先举例，再给结论。')
 assert.equal(fpA, tx.ruleFingerprint('回答先举例 再给结论'), '规范化的规则正文相同就该同一个指纹')
-assert.notEqual(fpA, tx.ruleFingerprint('回答先给结论，再举例'), '顺序不同是两条规则')
+assert.notEqual(fpA, tx.ruleFingerprint('回答先报数字，再举例'), '顺序不同是两条规则')
 assert.equal(fpA.length, 16)
 assert.equal(tx.RULE_ALGO, 'nfkc-wp1')
 console.log('48. 规则指纹：标点与空白不参与算，16 位')
@@ -76,10 +76,10 @@ console.log('49. evidenceAfter 是目标状态，算两次结果只由 base 决�
 /* ---------------- 50. 提交：三个文件一起前进 ---------------- */
 
 store.writeEvents([event({ id: 'a' })])
-const okCommit = await tx.commitPersona({ l0: '我是大肥鱼。', l1: '- 回答先举例，再给结论。', l2: '深海底。', consume: ['a'] })
+const okCommit = await tx.commitPersona({ l0: '我是样例鱼。', l1: '- 回答先举例，再给结论。', l2: '浅海底。', consume: ['a'] })
 assert.equal(okCommit.ok, true)
 assert.deepEqual(okCommit.consumed, ['a'])
-assert.equal(persona.readPersona().l0, '我是大肥鱼。')
+assert.equal(persona.readPersona().l0, '我是样例鱼。')
 assert.equal(store.findById('a').used, true)
 assert.equal(store.findById('a').consumedBy.startsWith('tx-'), true, 'consumedBy 要记下是哪个事务')
 assert.equal(tx.readEvidence().rules[fpA].count, 1, '证据计数要跟着前进')
@@ -88,7 +88,7 @@ console.log('50. 提交：persona / 事件 / 证据一起前进，日志清空')
 
 /* ---------------- 51. 幂等恢复：日志没删掉也不重复计数 ---------------- */
 
-const shaWritten = sha(persona.renderPersona({ l0: '我是大肥鱼。', l1: '- 回答先举例，再给结论。', l2: '深海底。' }))
+const shaWritten = sha(persona.renderPersona({ l0: '我是样例鱼。', l1: '- 回答先举例，再给结论。', l2: '浅海底。' }))
 const replayTarget = tx.buildEvidenceAfter(tx.readEvidence(), ['- 回答先举例，再给结论。'], '2026-11-07T10:00:00.000Z')
 tx.beginTx({ txId: 'tx-replay', personaSha256: shaWritten, consume: ['a'], evidenceAfter: replayTarget })
 const firstReplay = tx.recover()
@@ -123,7 +123,7 @@ console.log('53. 坏日志：隔离留档，不动数据')
 store.writeEvents([event({ id: 'c' })])
 rmSync(evidencePath, { force: true })
 mkdirSync(evidencePath, { recursive: true }) // 让 evidence 写成目录 → 必然失败
-const pending = await tx.commitPersona({ l0: '我是大肥鱼。', l1: '- 回答先举例，再给结论。\n- 不说客套话。', l2: '', consume: ['c'] })
+const pending = await tx.commitPersona({ l0: '我是样例鱼。', l1: '- 回答先举例，再给结论。\n- 不说客套话。', l2: '', consume: ['c'] })
 assert.equal(pending.ok, true, 'persona 已经写成功了，不能报整体失败')
 assert.equal(pending.pending, true, '要说清「已保存但消费待恢复」：' + JSON.stringify(pending))
 assert.equal(store.findById('c').used, true, '消费其实已经发生了（第 4 步前半）')
@@ -139,13 +139,13 @@ console.log('54. 三文件一致：写不下去报 pending，恢复后计数正�
 /* ---------------- 55. 串行化：外部持锁 → locked；并发提交各自成功 ---------------- */
 
 writeFileSync(lockPath, String(process.pid)) // 一个**活着的**进程持锁（写 gcd 之外的 pid 会被当陈旧锁清掉）
-const locked = await tx.commitPersona({ l0: '我是大肥鱼。', l1: '- 先说结论。', l2: '', consume: [] })
+const locked = await tx.commitPersona({ l0: '我是样例鱼。', l1: '- 先说结论。', l2: '', consume: [] })
 assert.equal(locked.ok, false)
 assert.equal(locked.code, 'locked', '有人正在保存，就该说 locked，不是排队等死：' + JSON.stringify(locked))
 rmSync(lockPath, { force: true })
 const [one, two] = await Promise.all([
-  tx.commitPersona({ l0: '我是大肥鱼。', l1: '- 先说结论。', l2: '', consume: [] }),
-  tx.commitPersona({ l0: '我是大肥鱼。', l1: '- 先说结论。', l2: '', consume: [] }),
+  tx.commitPersona({ l0: '我是样例鱼。', l1: '- 先说结论。', l2: '', consume: [] }),
+  tx.commitPersona({ l0: '我是样例鱼。', l1: '- 先说结论。', l2: '', consume: [] }),
 ])
 assert.equal(one.ok && two.ok, true, '进程内两次提交要串行跑完，都成功：' + JSON.stringify([one, two]))
 assert.equal(tx.readTx(), null, '跑完不能留日志')
@@ -153,7 +153,7 @@ assert.equal(existsSync(lockPath), false, '跑完要放锁')
 
 // 陈旧锁：上次被强杀留下的锁（pid 早没了）必须能自愈，否则「保存人格」永久 409
 writeFileSync(lockPath, '999999')
-const dead = await tx.commitPersona({ l0: '我是大肥鱼。', l1: '- 先说结论。', l2: '', consume: [] })
+const dead = await tx.commitPersona({ l0: '我是样例鱼。', l1: '- 先说结论。', l2: '', consume: [] })
 assert.equal(dead.ok, true, '死进程留下的锁要自己清掉，不能让人手动删文件：' + JSON.stringify(dead))
 assert.equal(existsSync(lockPath), false, '自愈之后锁也要放掉')
 console.log('55. 串行化：外部持锁报 locked，陈旧锁自愈，并发提交串行完成')
@@ -168,12 +168,12 @@ console.log('55. 串行化：外部持锁报 locked，陈旧锁自愈，并发�
   const ev = store.readEvents().find((entry) => entry.quote === '我说过别写客套话')
   rmSync(evidencePath, { force: true })
   mkdirSync(evidencePath, { recursive: true })
-  const stuck = await tx.commitPersona({ l0: '我是大肥鱼。', l1: '- 半截规则。', l2: '', consume: [ev.id] })
+  const stuck = await tx.commitPersona({ l0: '我是样例鱼。', l1: '- 半截规则。', l2: '', consume: [ev.id] })
   assert.equal(stuck.pending, true, '先把证据记账弄坏：' + JSON.stringify(stuck))
   rmSync(evidencePath, { recursive: true, force: true })
 
   // 用户没重启，直接又点了一次保存 —— 这次必须先把上一次结清，不能把它的 evidenceAfter 盖掉
-  const second = await tx.commitPersona({ l0: '我是大肥鱼。', l1: '- 第二次的规则。', l2: '', consume: [] })
+  const second = await tx.commitPersona({ l0: '我是样例鱼。', l1: '- 第二次的规则。', l2: '', consume: [] })
   assert.equal(second.ok, true, '第二次保存要成功：' + JSON.stringify(second))
   const rules = tx.readEvidence().rules
   assert.equal(rules[tx.ruleFingerprint('- 半截规则。')]?.count, 1, '上一次那条规则的计数不能凭空蒸发')
@@ -201,10 +201,10 @@ console.log('56. 非法 id：整单拒绝，三个文件都不动')
 
 {
   const kept = store.appendEvents([
-    { id: store.eventId('s-d', 1, '我说过要先给结论'), at: new Date().toISOString(), session: 's-d', idx: 1, quote: '我说过要先给结论', signal: '我说过', strength: 'strong' },
+    { id: store.eventId('s-d', 1, '我说过要先报数字'), at: new Date().toISOString(), session: 's-d', idx: 1, quote: '我说过要先报数字', signal: '我说过', strength: 'strong' },
   ])
   assert.equal(kept, 1)
-  const target = store.readEvents().find((entry) => entry.quote === '我说过要先给结论')
+  const target = store.readEvents().find((entry) => entry.quote === '我说过要先报数字')
   const dropped = store.discardByIds([target.id])
   assert.equal(dropped.ok, true, '丢弃要成功：' + JSON.stringify(dropped))
   const afterDrop = store.findById(target.id)
@@ -212,7 +212,7 @@ console.log('56. 非法 id：整单拒绝，三个文件都不动')
   assert.equal(afterDrop.consumedBy, null, '丢弃不是消费：consumedBy 留空')
 
   const personaBefore = persona.readPersona().l1
-  const verdict = await tx.commitPersona({ l0: '我是大肥鱼。', l1: '- 又说了一句。', l2: '', consume: [target.id] })
+  const verdict = await tx.commitPersona({ l0: '我是样例鱼。', l1: '- 又说了一句。', l2: '', consume: [target.id] })
   assert.equal(verdict.ok, false, '丢弃过的证据不能再当依据')
   assert.equal(verdict.code, 'validation')
   assert.match(verdict.error, /已被丢弃/)

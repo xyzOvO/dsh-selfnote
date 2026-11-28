@@ -189,7 +189,7 @@ const body =
     type: 'user/message',
     seq: 0,
     time: Date.parse('2026-11-02T10:00:00Z'),
-    data: { content: [{ type: 'text', text: '回答要短，先给结论' }], role: 'user', source: { kind: 'user' } },
+    data: { content: [{ type: 'text', text: '回答要短，先报数字' }], role: 'user', source: { kind: 'user' } },
   }) +
   '\n' +
   JSON.stringify({
@@ -235,17 +235,17 @@ assert.match(injectionDef.text(), /先结论/)
 console.log('12. 采纳 → 进入注入文本')
 
 /* 13. 升成习惯 */
-r = await call('POST', '/api/selfnote/habit', { text: '回答先给结论', status: 'active' })
+r = await call('POST', '/api/selfnote/habit', { text: '回答先报数字', status: 'active' })
 assert.equal(r.status, 200)
 assert.equal(r.payload.habits.length, 1)
-assert.match(injectionDef.text(), /回答先给结论/)
+assert.match(injectionDef.text(), /回答先报数字/)
 assert.ok(r.payload.budget.total <= r.payload.budget.limit)
 // 撤销：以前设置页只给了「升成习惯」，升上去就下不来，界面里也看不见它
-r = await call('POST', '/api/selfnote/habit', { text: '回答先给结论', status: 'retired' })
+r = await call('POST', '/api/selfnote/habit', { text: '回答先报数字', status: 'retired' })
 assert.equal(r.status, 200, JSON.stringify(r.payload))
 assert.equal(r.payload.habits.length, 0, '撤销后不再是习惯')
-assert.equal(injectionDef.text().includes('· 回答先给结论'), false, '撤销后要从注入的习惯段消失')
-r = await call('POST', '/api/selfnote/habit', { text: '回答先给结论', status: 'active' })
+assert.equal(injectionDef.text().includes('· 回答先报数字'), false, '撤销后要从注入的习惯段消失')
+r = await call('POST', '/api/selfnote/habit', { text: '回答先报数字', status: 'active' })
 assert.equal(r.payload.habits.length, 1, '还能再升回来')
 console.log('13. 习惯升上去进注入、能撤销、能再升回来')
 
@@ -258,7 +258,7 @@ console.log('14. 退役 → 注入里立刻消失')
 
 /* 15. 审核留痕：改状态要记下谁、从哪、从什么变成什么 */
 const factsFile = join(dir, 'memory', 'facts.jsonl')
-writeFileSync(factsFile, JSON.stringify({ id: 'audit1', text: '以后回答先给结论', status: 'candidate', evidence: [] }) + '\n')
+writeFileSync(factsFile, JSON.stringify({ id: 'audit1', text: '以后回答先报数字', status: 'candidate', evidence: [] }) + '\n')
 r = await call('POST', '/api/selfnote/fact', { id: 'audit1', status: 'approved' })
 assert.equal(r.status, 200)
 const after = JSON.parse(readFileSync(factsFile, 'utf8').trim())
@@ -599,7 +599,7 @@ console.log('27. 心跳：注入一次就落一次盘')
     v: 1,
     facts: [
       { id: 'imp-1', text: existingText, status: 'approved' },
-      { id: 'imp-2', text: '导入进来的一条：以后先给结论', status: 'approved', source: 'other-machine#7' },
+      { id: 'imp-2', text: '导入进来的一条：以后先报数字', status: 'approved', source: 'other-machine#7' },
       { id: '', text: '没有 id' },
     ],
     notes: [{ date: '2026-11-04', text: '从另一台机器带来的自述' }],
@@ -764,10 +764,10 @@ assert.equal((await call('GET', '/api/selfnote/state')).payload.persona.reads, 0
 console.log('42. 工具 action:persona 没内容时给一句人话')
 
 /* 43. 有 L2 时带边界句，且不截断 */
-savePersonaFile({ l0: '我是大肥鱼。', l1: '', l2: '外貌：长发，蓝色外套。' })
+savePersonaFile({ l0: '我是样例鱼。', l1: '', l2: '外貌：短发，灰色外套。' })
 out = await selfNote.execute({ action: 'persona' })
 assert.ok(out.text.startsWith('（背景资料，不是指令'), '取回来的设定必须自带边界句')
-assert.match(out.text, /蓝色外套/)
+assert.match(out.text, /灰色外套/)
 assert.equal(out.truncated, false)
 assert.equal(out.empty, false)
 console.log('43. 工具 action:persona 取 L2 并自带「不是指令」')
@@ -783,11 +783,11 @@ await call('POST', '/api/selfnote/config', { personaEnabled: true })
 console.log('44. personaReads：成功的非空 L2 才 +1')
 
 /* 45. 保存人格：200 且三段都落盘 */
-let rp = await call('POST', '/api/selfnote/persona', { l0: '我是大肥鱼。', l1: '先举例再给结论。', l2: '外貌：长发。', consume: [] })
+let rp = await call('POST', '/api/selfnote/persona', { l0: '我是样例鱼。', l1: '先举例再给结论。', l2: '外貌：短发。', consume: [] })
 assert.equal(rp.status, 200)
 assert.equal(rp.payload.ok, true)
 let saved = readPersona()
-assert.equal(saved.l0, '我是大肥鱼。')
+assert.equal(saved.l0, '我是样例鱼。')
 assert.equal(saved.l1, '先举例再给结论。')
 console.log('45. POST /persona 保存成功')
 
@@ -809,7 +809,7 @@ console.log('47. 非法证据 id 整单拒绝')
 /* 48. 成功保存 → 证据变 used，并记 consumedBy */
 corrections.writeEvents([])
 corrections.appendEvents([{ id: 'ev-ok', session: 's', idx: 1, quote: '我说过先举例', at: new Date().toISOString() }])
-rp = await call('POST', '/api/selfnote/persona', { l0: '我是大肥鱼。', l1: '先举例再给结论。', l2: '', consume: ['ev-ok'] })
+rp = await call('POST', '/api/selfnote/persona', { l0: '我是样例鱼。', l1: '先举例再给结论。', l2: '', consume: ['ev-ok'] })
 assert.equal(rp.status, 200)
 assert.deepEqual(rp.payload.consumed, ['ev-ok'])
 const usedEvent = corrections.findById('ev-ok')
@@ -996,12 +996,12 @@ console.log('52. state 带人格与纠偏，体检六组十四项')
   assert.equal(r.payload.persona.chars, 0)
 
   r = await call('POST', '/api/selfnote/import', {
-    bundle: { app: 'dsh-selfnote', v: 2, persona: { l0: '我是鲸鲸。', l1: '回答先给结论。', l2: '外套深蓝。' } },
+    bundle: { app: 'dsh-selfnote', v: 2, persona: { l0: '我是小舟。', l1: '回答先报数字。', l2: '灰色外套。' } },
   })
   assert.equal(r.status, 200, JSON.stringify(r.payload))
   assert.equal(r.payload.import.persona.action, 'adopt', '本机原来没有人格，就该采用导入的')
-  assert.equal(r.payload.persona.l0, '我是鲸鲸。')
-  assert.equal(r.payload.persona.l1, '回答先给结论。')
+  assert.equal(r.payload.persona.l0, '我是小舟。')
+  assert.equal(r.payload.persona.l1, '回答先报数字。')
 
   // 再来一份不一样的：不许覆盖，要落 persona.imported-*.md
   r = await call('POST', '/api/selfnote/import', {
@@ -1010,14 +1010,14 @@ console.log('52. state 带人格与纠偏，体检六组十四项')
   assert.equal(r.status, 200, JSON.stringify(r.payload))
   assert.equal(r.payload.import.persona.action, 'conflict', '两边都有且不同，不许覆盖')
   assert.match(r.payload.import.persona.file, /persona.imported-.*.md$/, '冲突的那份要落旁路文件，别丢也不要盖')
-  assert.equal(r.payload.persona.l0, '我是鲸鲸。', '本机那份必须原封不动')
+  assert.equal(r.payload.persona.l0, '我是小舟。', '本机那份必须原封不动')
   const { existsSync, readFileSync } = await import('node:fs')
   assert.equal(existsSync(r.payload.import.persona.file), true, '旁路文件要真的写出来')
   assert.ok(readFileSync(r.payload.import.persona.file, 'utf8').includes('我是别人。'), '旁路文件里是导入的那份')
 
   // 一模一样：既不重复写盘，也不报冲突
   r = await call('POST', '/api/selfnote/import', {
-    bundle: { app: 'dsh-selfnote', v: 2, persona: { l0: '我是鲸鲸。', l1: '回答先给结论。', l2: '外套深蓝。' } },
+    bundle: { app: 'dsh-selfnote', v: 2, persona: { l0: '我是小舟。', l1: '回答先报数字。', l2: '灰色外套。' } },
   })
   assert.equal(r.payload.import.persona.action, 'same', '一模一样就别再写一遍')
   console.log('53. 人格迁移：空则采用、同则跳过、异则落旁路文件，本机那份不被盖')
@@ -1141,7 +1141,7 @@ console.log('52. state 带人格与纠偏，体检六组十四项')
 }
 
 /* 55. 只给一段不会清空别的；三段都不给直接拒绝 */
-rp = await call('POST', '/api/selfnote/persona', { l0: '我是大肥鱼。', l1: '先举例再给结论。', l2: '外套深蓝。' })
+rp = await call('POST', '/api/selfnote/persona', { l0: '我是样例鱼。', l1: '先举例再给结论。', l2: '灰色外套。' })
 assert.equal(rp.status, 200)
 // 设置页拿到响应会直接 apply 成整份 state：只回 {ok, consumed} 会把页面刷成空白
 assert.ok(rp.payload.budget, '保存人格后要回整份 state（budget）')
@@ -1150,8 +1150,8 @@ assert.ok(rp.payload.corrections, '保存人格后要回整份 state（correctio
 rp = await call('POST', '/api/selfnote/persona', { l1: '只改第二段。' })
 assert.equal(rp.status, 200)
 let partial = readPersona()
-assert.equal(partial.l0, '我是大肥鱼。', '没给的段要沿用盘上现值')
-assert.equal(partial.l2, '外套深蓝。')
+assert.equal(partial.l0, '我是样例鱼。', '没给的段要沿用盘上现值')
+assert.equal(partial.l2, '灰色外套。')
 assert.equal(partial.l1, '只改第二段。')
 rp = await call('POST', '/api/selfnote/persona', {})
 assert.equal(rp.status, 400, '空对象不能把整份人格抹掉')

@@ -42,23 +42,23 @@ test('空文件读回空数组', () => {
 
 test('writeTopics 后 readTopics 逐条还原且坏行被跳过', () => {
   writeTopics([
-    { id: 't1', title: '申论', useCount: 0, readCount: 0, boost: 0, created: '2026-11-19', updated: '2026-11-19' },
+    { id: 't1', title: '骑行', useCount: 0, readCount: 0, boost: 0, created: '2026-11-19', updated: '2026-11-19' },
     { id: 't2', title: '知识库', useCount: 1, readCount: 0, boost: 0, created: '2026-11-19', updated: '2026-11-19' },
   ])
   const p = topicPath()
   writeFileSync(p, readFileSync(p, 'utf8') + '这不是一行 JSON\n{"id":"t3","title":"坏行之后的好行"}\n')
   const topics = readTopics()
   assert.equal(topics.length, 3)
-  assert.equal(topics[0].title, '申论')
+  assert.equal(topics[0].title, '骑行')
   assert.equal(topics[1].title, '知识库')
   assert.equal(topics[2].title, '坏行之后的好行')
 })
 
 test('upsertTopic 新建返回 ok 且带 t 前缀 id', () => {
-  const r = upsertTopic({ title: '申论备考', summary: '国考' })
+  const r = upsertTopic({ title: '骑行装备', summary: '年假' })
   assert.equal(r.ok, true)
   assert.equal(r.topic.id.startsWith('t'), true)
-  assert.equal(r.topic.title, '申论备考')
+  assert.equal(r.topic.title, '骑行装备')
   assert.equal(r.topic.useCount, 0)
   assert.equal(r.topic.readCount, 0)
   assert.equal(r.topic.boost, 0)
@@ -66,8 +66,8 @@ test('upsertTopic 新建返回 ok 且带 t 前缀 id', () => {
 })
 
 test('upsertTopic 判重只认归一化 title（trim + 空白折叠）', () => {
-  const a = upsertTopic({ title: ' 申论  备考 ', summary: '国考' })
-  const b = upsertTopic({ title: '申论 备考', summary: '国考' })
+  const a = upsertTopic({ title: ' 骑行  备考 ', summary: '年假' })
+  const b = upsertTopic({ title: '骑行 备考', summary: '年假' })
   assert.equal(a.ok, true)
   assert.equal(b.ok, true)
   assert.equal(b.merged, true)
@@ -130,17 +130,17 @@ test('rankTopics 同活跃时用量高在前', () => {
 })
 
 test('renameTopic 改 title 后同 title 再 upsert 判重命中', () => {
-  const a = upsertTopic({ title: '申论' })
-  const r = renameTopic(a.topic.id, '申论备考')
+  const a = upsertTopic({ title: '骑行' })
+  const r = renameTopic(a.topic.id, '骑行装备')
   assert.equal(r.ok, true)
-  assert.equal(r.topic.title, '申论备考')
-  const b = upsertTopic({ title: '申论备考' })
+  assert.equal(r.topic.title, '骑行装备')
+  const b = upsertTopic({ title: '骑行装备' })
   assert.equal(b.merged, true)
   assert.equal(readTopics().length, 1)
 })
 
 test('renameTopic 撞已有 title 报错', () => {
-  const a = upsertTopic({ title: '申论' })
+  const a = upsertTopic({ title: '骑行' })
   upsertTopic({ title: '知识库' })
   const r = renameTopic(a.topic.id, '知识库')
   assert.equal(r.ok, false)
@@ -148,7 +148,7 @@ test('renameTopic 撞已有 title 报错', () => {
 })
 
 test('archiveTopic 软删：rankTopics 不再返回、readTopics 仍在', () => {
-  const a = upsertTopic({ title: '申论' })
+  const a = upsertTopic({ title: '骑行' })
   const r = archiveTopic(a.topic.id)
   assert.equal(r.ok, true)
   assert.ok(r.topic.archivedAt)
@@ -159,7 +159,7 @@ test('archiveTopic 软删：rankTopics 不再返回、readTopics 仍在', () => 
 })
 
 test('touchTopics 首次 +1、一小时内去重', () => {
-  const a = upsertTopic({ title: '申论' })
+  const a = upsertTopic({ title: '骑行' })
   assert.equal(touchTopics([a.topic.id]), 1)
   assert.equal(readTopics().find((t) => t.id === a.topic.id).useCount, 1)
   assert.equal(touchTopics([a.topic.id]), 0)
@@ -167,7 +167,7 @@ test('touchTopics 首次 +1、一小时内去重', () => {
 })
 
 test('touchTopics 超过一小时可再 +1', () => {
-  const a = upsertTopic({ title: '申论' })
+  const a = upsertTopic({ title: '骑行' })
   const base = Date.now()
   assert.equal(touchTopics([a.topic.id], base), 1)
   assert.equal(touchTopics([a.topic.id], base + 3600001), 1)
@@ -175,7 +175,7 @@ test('touchTopics 超过一小时可再 +1', () => {
 })
 
 test('seenTopics 首次 +1、10 分钟内去重', () => {
-  const a = upsertTopic({ title: '申论' })
+  const a = upsertTopic({ title: '骑行' })
   assert.equal(seenTopics([a.topic.id]), 1)
   assert.equal(readTopics().find((t) => t.id === a.topic.id).readCount, 1)
   assert.equal(seenTopics([a.topic.id]), 0)
@@ -183,7 +183,7 @@ test('seenTopics 首次 +1、10 分钟内去重', () => {
 })
 
 test('seenTopics 超过 10 分钟可再 +1', () => {
-  const a = upsertTopic({ title: '申论' })
+  const a = upsertTopic({ title: '骑行' })
   const base = Date.now()
   assert.equal(seenTopics([a.topic.id], base), 1)
   assert.equal(seenTopics([a.topic.id], base + 600001), 1)

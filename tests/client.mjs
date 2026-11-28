@@ -476,12 +476,12 @@ fetchMode = 'ok'
 const opsState = {
   facts: {
     candidates: [],
-    approved: [{ id: 'f1', text: '中文正常说，不硬缩' }],
+    approved: [{ id: 'f1', text: '回复别太长，不硬缩' }],
     retired: [{ id: 'f3', text: '旧规则已退役' }],
   },
   validity: { cards: [] },
   injection: { segments: [{ key: 'facts', label: '结论', skippedDetail: [
-    { id: 'facts:abc', preview: '中文正常说，不硬缩', reason: 'budget' },
+    { id: 'facts:abc', preview: '回复别太长，不硬缩', reason: 'budget' },
   ] }] },
 }
 let opsTree = await renderConfirmFresh(opsState, '')
@@ -491,7 +491,7 @@ aBtn.props.onClick()
 opsTree = rerender()
 const aInput = findInputs(findByClass(opsTree, 'sn-ops-skipped')[0])[0]
 assert.ok(aInput, '点改这条后要展开输入框')
-assert.equal(aInput.props.value, '中文正常说，不硬缩', '输入框预填命中事实原文')
+assert.equal(aInput.props.value, '回复别太长，不硬缩', '输入框预填命中事实原文')
 aInput.props.onChange({ target: { value: '中文照常说' } })
 opsTree = rerender()
 assert.equal(findInputs(findByClass(opsTree, 'sn-ops-skipped')[0])[0].props.value, '中文照常说', '草稿写入后可重渲染')

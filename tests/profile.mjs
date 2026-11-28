@@ -26,7 +26,7 @@ const fact = (id, text, tags, status = 'approved', updated = '2026-11-02') => ({
 
 /* 1. 只有 approved 参与 */
 const facts = [
-  fact('a', '回答要先给结论，细节等他问。', ['沟通']),
+  fact('a', '回答要先报数字，细节等他问。', ['沟通']),
   fact('b', '不要长篇清单，短句优先。', ['沟通'], 'approved', '2026-11-03'),
   fact('c', '他在备考，作息昼夜颠倒。', ['作息']),
   fact('d', '候选里的话不该进画像。', ['沟通'], 'candidate'),
@@ -49,7 +49,7 @@ console.log('2. 可追溯：' + built.parts.length + ' 个来源 id')
 
 /* 3. 同标签多条 → 记冲突，不擅自合并 */
 assert.deepEqual(built.conflicts, [{ tag: '沟通', count: 1 }])
-assert.ok(!built.text.includes('回答要先给结论'), '旧的那条不该被拼进来当结论')
+assert.ok(!built.text.includes('回答要先报数字'), '旧的那条不该被拼进来当结论')
 console.log('3. 同标签多条只记冲突，不合并')
 
 /* 4. 长度上限 */

@@ -23,7 +23,7 @@ console.log('1. 普通聊天不触发')
 /* 2. 四类触发认得出来 */
 assert.ok(capture.triggersOf('以后都用中文回复').includes('standing'))
 assert.ok(capture.triggersOf('不要再用 emoji 了').includes('prohibit'))
-assert.ok(capture.triggersOf('我更喜欢先给结论').includes('prefer'))
+assert.ok(capture.triggersOf('我更喜欢先报数字').includes('prefer'))
 assert.ok(capture.triggersOf('你刚才说得不对，应该先问清楚').includes('correct'))
 console.log('2. 四类触发都认得（长期 / 禁止 / 偏好 / 纠正）')
 

@@ -19,7 +19,7 @@ const lockFile = factsFile + '.lock'
 const seed = (facts) => writeFacts(facts)
 
 /* 1. 基本形状：changed:false 不写盘 */
-seed([{ id: 'a', text: '以后回答先给结论', status: 'approved', hitCount: 0 }])
+seed([{ id: 'a', text: '以后回答先报数字', status: 'approved', hitCount: 0 }])
 const before = readFileSync(factsFile, 'utf8')
 const noop = mutateFacts(() => ({ changed: false }))
 assert.equal(noop.changed, false)
@@ -28,7 +28,7 @@ console.log('1. changed:false 不写文件，也不留锁')
 
 /* 2. 注入记热度不能把已有候选抹掉 */
 seed([
-  { id: 'a', text: '以后回答先给结论', status: 'approved', hitCount: 0 },
+  { id: 'a', text: '以后回答先报数字', status: 'approved', hitCount: 0 },
   { id: 'b', text: '以后别用表情', status: 'candidate' },
 ])
 touchFacts(['a'])
@@ -38,7 +38,7 @@ assert.ok(facts.find((f) => f.id === 'b'), '候选不该被热度的整份写回
 console.log('2. 记热度不覆盖已有候选')
 
 /* 3. 锁被别的进程占着：重试后放弃，绝不写半份 */
-seed([{ id: 'a', text: '以后回答先给结论', status: 'approved', hitCount: 0 }])
+seed([{ id: 'a', text: '以后回答先报数字', status: 'approved', hitCount: 0 }])
 writeFileSync(lockFile, '')
 const blocked = mutateFacts((current) => {
   current.push({ id: 'mine', text: '我的改动', status: 'candidate' })
@@ -67,7 +67,7 @@ assert.throws(() => readFileSync(lockFile, 'utf8'), /ENOENT/, '写完必须把�
 console.log('4. 写完放锁，不留锁文件')
 
 /* 6. 审核改状态也走同一个事务：找不到 id 时不写盘 */
-seed([{ id: 'q', text: '以后回答先给结论', status: 'candidate' }])
+seed([{ id: 'q', text: '以后回答先报数字', status: 'candidate' }])
 const stamp = readFileSync(factsFile, 'utf8')
 const miss = setFactStatus('nope', 'approved')
 assert.equal(miss.ok, false)

@@ -62,7 +62,7 @@ function call(method, url, body) {
 /* 1. 纯函数层：导出要带自述分型与钉住，导入要还原它们 */
 const originalNotes = [
   { date: '2026-11-08', text: '这周在做全量复测', tier: 'temp', pin: false },
-  { date: '2026-11-07', text: '回答先给结论', tier: 'stable', pin: true },
+  { date: '2026-11-07', text: '回答先报数字', tier: 'stable', pin: true },
   { date: '2026-11-06', text: '身份素材一条', tier: 'core', pin: false },
 ]
 const roundTrip = buildBundle({
@@ -117,7 +117,7 @@ store.writeConfig({
   profileOverride: '',
   profileMaxChars: 80,
   halfLifeDays: 90,
-  noteGuide: '先给结论',
+  noteGuide: '先报数字',
   personaEnabled: false,
   tempTtlDays: 21,
 })

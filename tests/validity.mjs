@@ -72,7 +72,7 @@ const checks = []
 const provenanceCalls = []
 const cardFacts = [
   { id: 'addr', text: '旧地址是人民路 1 号' },
-  { id: 'other', text: '回答先给结论' },
+  { id: 'other', text: '回答先报数字' },
 ]
 const cards = buildValidityCards({
   events,
@@ -167,7 +167,7 @@ const withKept = [
   { id: 'kept-one', text: '旧地址是人民路 1 号', status: 'approved',
     history: [{ at: '2026-11-26T00:00:00.000Z', from: null, to: null, via: 'validity-kept', signal: sig }] },
   { id: 'live-one', text: '旧地址是人民路 1 号', status: 'approved', history: [] },
-  { id: 'unrelated', text: '回答先给结论', status: 'approved', history: [] },
+  { id: 'unrelated', text: '回答先报数字', status: 'approved', history: [] },
 ]
 const keptCandidates = pickCandidates(withKept, sig, 5)
 assert.deepEqual(keptCandidates.map((item) => item.id), ['live-one', 'unrelated'], '保留过的那条不再列候选，其余事实保留')

@@ -166,7 +166,7 @@ console.log('2. 证据包核回原文、去重、跳过孤证，不复制整份�
 
 /* 3. 风险分级：操作路径 / 行为准则 / 权限边界能分开 */
 assert.equal(review.classifyRisk([{ quote: '批量重命名前先 dry-run 打印命中数' }]), 'procedure')
-assert.equal(review.classifyRisk([{ quote: '以后回答先给结论，中文正常说' }]), 'behavior')
+assert.equal(review.classifyRisk([{ quote: '以后回答先报数字，回复别太长' }]), 'behavior')
 assert.equal(review.classifyRisk([{ quote: '以后别自动改配置文件' }]), 'permission')
 console.log('3. 风险分级能区分操作路径、行为准则、权限边界')
 
@@ -212,7 +212,7 @@ const procedureItem = {
   evidence: [...dryEvidence, dryEvidence[0]],
 }
 const behaviorItem = {
-  text: '中文正常说、结论先行，英文术语顺手带一句白话解释',
+  text: '回复别太长、结论先行，英文术语顺手带一句白话解释',
   risk: 'behavior',
   target: 'candidate-fact',
   verified: false,
@@ -356,7 +356,7 @@ console.log('14. /review API 接入审批入口，不提供自动批准动作')
 function task2Evidence(sessionId, index, quote, extra = {}) {
   return { sessionId, index, quote, provenance: 'own', ...extra }
 }
-const ownAQuote = '以后回答先给结论，中文正常说'
+const ownAQuote = '以后回答先报数字，回复别太长'
 const ownBQuote = '结论先行，英文术语带一句白话解释'
 const quotedQuote = '助手转述的一条'
 const pastedQuote = '[Important] 文件:12 — 粘贴文本'
@@ -369,7 +369,7 @@ writeSession('t2-boundary', [userMessage(0, Date.parse(AT) + 14000, boundaryQuot
 
 const ownBehaviorPlan = review.proposeCandidates({
   items: [{
-    text: '中文正常说、结论先行，英文术语顺手带一句白话解释',
+    text: '回复别太长、结论先行，英文术语顺手带一句白话解释',
     risk: 'behavior',
     target: 'candidate-fact',
     boundary: true,

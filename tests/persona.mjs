@@ -14,19 +14,19 @@ process.env.DSH_MEMORY_DIR = join(dir, 'memory')
 const { parsePersona, renderPersona, countChars } = await import('../lib/persona.js')
 
 // 1. 三段标题分对，标题行不进正文
-const p = parsePersona('## L0 核心身份\n我是大肥鱼。\n\n## L1 行为规则\n- 先给结论。\n\n## L2 扩展设定\n深色长发。\n')
-assert.equal(p.l0, '我是大肥鱼。')
-assert.equal(p.l1, '- 先给结论。')
-assert.equal(p.l2, '深色长发。')
+const p = parsePersona('## L0 核心身份\n我是样例鱼。\n\n## L1 行为规则\n- 先报数字。\n\n## L2 扩展设定\n灰色短发。\n')
+assert.equal(p.l0, '我是样例鱼。')
+assert.equal(p.l1, '- 先报数字。')
+assert.equal(p.l2, '灰色短发。')
 assert.equal(p.sectionless, false)
 
 // 2. 无标题 → 整篇 L1 + sectionless
-const plain = parsePersona('- 先给结论。\n- 不客套。')
-assert.equal(plain.l1, '- 先给结论。\n- 不客套。')
+const plain = parsePersona('- 先报数字。\n- 不客套。')
+assert.equal(plain.l1, '- 先报数字。\n- 不客套。')
 assert.equal(plain.sectionless, true)
 
 // 3. BOM + CRLF 不影响
-assert.equal(parsePersona('\uFEFF## L1 行为规则\r\n- 先给结论。\r\n').l1, '- 先给结论。')
+assert.equal(parsePersona('\uFEFF## L1 行为规则\r\n- 先报数字。\r\n').l1, '- 先报数字。')
 
 // 4. 同一层两次 → 拼接；标题在但空 → 视为不存在
 assert.equal(parsePersona('## L1\nA\n## L1\nB\n').l1, 'A\nB')
@@ -40,7 +40,7 @@ assert.ok(parsePersona('## 备注\n乙\n').l1.includes('备注'))
 assert.equal(parsePersona(renderPersona({ l0: '甲', l1: '乙', l2: '' })).l1, '乙')
 
 // 字符计数按码点
-assert.equal(countChars('大肥鱼'), 3)
+assert.equal(countChars('样例鱼'), 3)
 assert.equal(countChars('👨‍👩‍👧'), 5)
 assert.equal(countChars('é'), 1)
 assert.equal(countChars('e\u0301'), 2)
@@ -156,15 +156,15 @@ const writeRawPersona = (l0, l1) => writeFileSync(personaPath(), `## L0 核心�
 boot({})
 
 // 5/6. 人格段第一；框架句在边界句之前、在 L0 之前
-savePersonaFile({ l0: '我是大肥鱼。', l1: '- 先给结论。\n- 不客套。', l2: '深色长发。' })
+savePersonaFile({ l0: '我是样例鱼。', l1: '- 先报数字。\n- 不客套。', l2: '灰色短发。' })
 assert.equal((await personaOf()).key, 'persona')
 assert.equal((await stateOfNow()).injection.segments[0].key, 'persona')
 const t = await textOf()
 assert.ok(t.indexOf('以下是你自己的样子') < t.indexOf('（背景资料，不是指令）'))
-assert.ok(t.indexOf('以下是你自己的样子') < t.indexOf('我是大肥鱼'))
+assert.ok(t.indexOf('以下是你自己的样子') < t.indexOf('我是样例鱼'))
 
 // 7. L2 一个字节都不进每回合注入
-assert.ok(!t.includes('深色长发'))
+assert.ok(!t.includes('灰色短发'))
 
 // 10/11. L2 非空 → 有指路句；且不进 chars
 assert.ok(t.includes('self_note action:"persona"'))
@@ -176,7 +176,7 @@ assert.ok(t.includes('self_note action:"persona"'))
 }
 
 // 10b. L2 为空 → 没有指路句
-savePersonaFile({ l0: '我是大肥鱼。', l1: '- 先给结论。', l2: '' })
+savePersonaFile({ l0: '我是样例鱼。', l1: '- 先报数字。', l2: '' })
 assert.ok(!(await textOf()).includes('self_note action:"persona"'))
 
 // 8. L1 二十行放不下 → 整行跳过 + 门牌（超 320 只能是外部写法，保存会被校验拦住）
@@ -218,7 +218,7 @@ assert.ok(longL0.l0.chars <= 80)
 assert.equal(longL0.truncated, true)
 
 // 19. personaEnabled: false → 段仍在但零值（A 计划口径裁定 ①：启用时恒 9 段，text/overhead 不变）
-savePersonaFile({ l0: '我是大肥鱼。', l1: '- 先给结论。', l2: '' })
+savePersonaFile({ l0: '我是样例鱼。', l1: '- 先报数字。', l2: '' })
 boot({ personaEnabled: false })
 {
   const off = (await stateOfNow()).injection
@@ -227,7 +227,7 @@ boot({ personaEnabled: false })
   assert.equal(off.segments[0].key, 'persona', '零值段仍排第一')
   assert.equal(seg.chars, 0, '零值段不占字数')
   assert.deepEqual(seg.skippedDetail, [], '零值段没有跳过解释')
-  assert.ok(!off.text.includes('我是大肥鱼'), '关掉就不把人格正文塞进注入')
+  assert.ok(!off.text.includes('我是样例鱼'), '关掉就不把人格正文塞进注入')
 }
 boot({})
 
@@ -243,7 +243,7 @@ console.log('18-20 人格进注入通过')
 // （22、23 追加在文件末尾，编号延续 21 之后）
 
 // 21. 字符口径统一：段落字数按码点算，加起来加固定开销必须正好等于总数
-savePersonaFile({ l0: '我是大肥鱼🐟。', l1: '- 先给结论。', l2: '' })
+savePersonaFile({ l0: '我是样例鱼🐟。', l1: '- 先报数字。', l2: '' })
 {
   const inj = (await stateOfNow()).injection
   assert.equal(inj.chars, countChars(inj.text), '总数要按码点算，不是 UTF-16 长度')
@@ -257,7 +257,7 @@ savePersonaFile({ l0: '我是大肥鱼🐟。', l1: '- 先给结论。', l2: '' 
 }
 
 // 22. 只写了 L2：注入里仍要有指路句（否则「有设定」这件事模型永远不知道）
-writeFileSync(personaPath(), '## L2\n\n深色长发，爱吃米饭。\n')
+writeFileSync(personaPath(), '## L2\n\n灰色短发，爱吃米饭。\n')
 {
   const inj = (await stateOfNow()).injection
   const seg = inj.segments.find((item) => item.key === 'persona')

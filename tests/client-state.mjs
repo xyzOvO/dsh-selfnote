@@ -57,9 +57,9 @@ const base = {
   profile: { enabled: true, override: '', maxChars: 60, manual: false, text: '', chars: 0, parts: [], sources: [], conflicts: [] },
   persona: {
     enabled: true,
-    l0: '我是鲸鲸。',
-    l1: '回答先给结论，再给细节。',
-    l2: '外套是深蓝色，喜欢在海边散步。',
+    l0: '我是小舟。',
+    l1: '回答先报数字，再给细节。',
+    l2: '外套是灰色，周末常去图书馆。',
     chars: 34,
     l0Chars: 5,
     l1Chars: 12,
@@ -106,7 +106,7 @@ const withCandidates = {
   ...base,
   facts: {
     candidates: [
-      { id: 'auto-1', text: '以后回答先给结论', status: 'candidate', source: 'session-abc#12', occurrences: 4, triggers: ['standing'], conflictWith: 'auto-2', similarTo: ['auto-2'], evidence: ['session-abc#12'] },
+      { id: 'auto-1', text: '以后回答先报数字', status: 'candidate', source: 'session-abc#12', occurrences: 4, triggers: ['standing'], conflictWith: 'auto-2', similarTo: ['auto-2'], evidence: ['session-abc#12'] },
       { id: 'auto-2', text: '以后回答先铺垫背景再给结论', status: 'candidate', source: 'session-abc#30', occurrences: 1, triggers: ['correct'], conflictWith: 'auto-1', similarTo: ['auto-1'], evidence: ['session-abc#30'] },
     ],
     approved: [
@@ -201,7 +201,7 @@ function collect(node, out = []) {
 let tree = render(withCandidates)
 let json = JSON.stringify(tree)
 assert.equal(tree.props.className, 'sn-root')
-assert.ok(json.includes('以后回答先给结论'), '候选文本要显示出来')
+assert.ok(json.includes('以后回答先报数字'), '候选文本要显示出来')
 assert.ok(json.includes('自动采集'), '自动采集的候选要标出来源')
 assert.ok(json.includes('出现 4 次'), '要显示出现次数')
 assert.ok(json.includes('session-abc'), '手动提交的仍显示 citation')
@@ -443,9 +443,9 @@ assert.deepEqual(
   ['l0', 'l1', 'l2'],
   '三个框分别是 L0 / L1 / L2',
 )
-assert.ok(json.includes('我是鲸鲸。'), 'L0 正文要显示出来')
-assert.ok(json.includes('回答先给结论，再给细节。'), 'L1 正文要显示出来')
-assert.ok(json.includes('外套是深蓝色'), 'L2 正文要显示出来（它不进注入，但人得能改）')
+assert.ok(json.includes('我是小舟。'), 'L0 正文要显示出来')
+assert.ok(json.includes('回答先报数字，再给细节。'), 'L1 正文要显示出来')
+assert.ok(json.includes('外套是灰色'), 'L2 正文要显示出来（它不进注入，但人得能改）')
 const pL0 = Array.from(base.persona.l0).length
 const pL1 = Array.from(base.persona.l1).length
 const pGap = pL0 > 0 && pL1 > 0 ? 1 : 0
@@ -467,7 +467,7 @@ const withCoreNote = {
   facts: { candidates: [], approved: [], retired: 0 },
   notes: [
     { date: '2026-11-05', text: '他很注意隐私！', tier: 'core', pin: true },
-    { date: '2026-11-04', text: '回答先给结论。', tier: 'stable' },
+    { date: '2026-11-04', text: '回答先报数字。', tier: 'stable' },
   ],
 }
 forcedTab = 'notes'

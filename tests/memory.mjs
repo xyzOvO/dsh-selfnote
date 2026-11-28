@@ -150,7 +150,7 @@ assert.equal(bad1.ok, false)
 const bad2 = memory.stageFact({ text: '行号不对', citation: { sessionId: 'session-aaaa', index: 99 } })
 assert.equal(bad2.ok, false)
 const good = memory.stageFact({
-  text: '他要求回答先给结论。',
+  text: '他要求回答先报数字。',
   kind: 'preference',
   tags: ['沟通'],
   citation: { sessionId: 'session-aaaa', index: 1 },
@@ -185,7 +185,7 @@ for (const text of ['第二条', '第三条', '第四条']) {
 }
 const suggestions = memory.habitSuggestions(3)
 assert.ok(suggestions.some((item) => item.tag === '沟通' && item.count >= 3), JSON.stringify(suggestions))
-assert.equal(memory.setHabit('回答先给结论', 'active', '沟通').ok, true)
+assert.equal(memory.setHabit('回答先报数字', 'active', '沟通').ok, true)
 const again = memory.habitSuggestions(3)
 assert.equal(again.find((item) => item.tag === '沟通').active, true, '升成习惯后建议里要标已激活')
 console.log('14. 同一标签出现 3 次才给建议，升成习惯后正确标记')
@@ -241,7 +241,7 @@ console.log('15. memoryStats 数字对得上')
 
 /* ---------- 18. 采纳重复候选：旧值让位、可恢复；冲突并存；retired 可查 ---------- */
 {
-  const oldFact = memory.stageFact({ text: '旧说法：先给结论。', citation: { sessionId: 'session-aaaa', index: 1 } })
+  const oldFact = memory.stageFact({ text: '旧说法：先报数字。', citation: { sessionId: 'session-aaaa', index: 1 } })
   assert.equal(oldFact.ok, true)
   const oldId = oldFact.fact.id
   assert.equal(memory.setFactStatus(oldId, 'approved').ok, true)
