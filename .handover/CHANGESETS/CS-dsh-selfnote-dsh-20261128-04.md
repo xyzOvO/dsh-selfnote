@@ -39,7 +39,7 @@ created: 2026-11-28T12:52Z
 - 方式：本变更集改动尚未 commit；如需回退，逐文件还原（lib/index.js 用 git checkout 回 107a7dc 版本、删除 tests/handover-delegated.mjs、撤回 tests/handover-coldstart.mjs 与 tests/version.mjs 的 F1/F2 改动、package.json/README.md 版本回 0.16.8、交接卡正文回退）。commit 后用 `git revert <hash>`。
 
 ## 关联发布
-- REL-0.16.9（版本号已 +0.0.1，是否单独发版由 OW 定；未发布）
+- REL-0.16.9（已发布 2026-11-28T21:16+08:00）：commit `64f76a5` 已 push origin/main；tag `v0.16.9` 已 push；GitHub Release 已建；npm `dsh-selfnote@0.16.9` 已 publish 到 registry.npmjs.org。registry 读取端点短暂 404 / dist-tags 停在 0.16.7 属传播延迟，用重发 E409「Cannot publish over previously staged version 0.16.9」反证已落库（同 v0.16.7 排障经验）。
 
 ## 未知 / 风险
 - [ ] 到期：

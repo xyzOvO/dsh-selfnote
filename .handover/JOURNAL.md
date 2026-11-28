@@ -40,3 +40,9 @@
 - 验证命令：`subagent` 起干净上下文探针，禁工具只准复述首回合所见（已实测，四行齐全）
 - 变更集：CS-dsh-selfnote-dsh-20261128-04
 - 事件：实机复验坐实 F3① 生效，委派 Agent 能接到指针；Web GUI 端口随重启变为 58356。人审状态仍为 awaiting-review（实机通过 ≠ 人审通过），待 OW 审 CS-01/-02/-03/-04。
+
+## 2026-11-28T13:17Z | dsh | - | T5 | awaiting-review
+- 一句话：OW 授权「提交推送发版」后，commit `64f76a5` 已 push origin/main、tag `v0.16.9` 已 push、GitHub Release 已建、npm `dsh-selfnote@0.16.9` 已发布到 registry.npmjs.org。
+- 验证命令：`git log -1 --oneline` / `git tag --points-at HEAD` / `gh release list` / `npm publish --registry=https://registry.npmjs.org/`（E409 反证）
+- 变更集：CS-dsh-selfnote-dsh-20261128-04（关联发布段已回填）
+- 事件：npm 默认 registry 是 npmmirror（未登录），OW 登录的是 npmjs.org（账号 xyz66），故 publish 显式加 `--registry=https://registry.npmjs.org/`。发后 registry 读取端点短暂 404、dist-tags 停在 0.16.7，用重发 E409「Cannot publish over previously staged version 0.16.9」反证已落库——与 v0.16.7 那次的传播延迟排障经验一致。docs/superpowers/** 与 docs/待办.md 仍未跟踪、未进 commit/npm 包。人审队列 4 条仍待人审。
