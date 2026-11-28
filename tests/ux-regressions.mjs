@@ -39,6 +39,16 @@ assert.ok(!/来源标着 preset/.test(src), '用户可见文案不说「来源�
 assert.ok(!/同 key/.test(src), '用户可见文案不说「同 key」')
 assert.ok(!/aria-label': '勾选 ' \+ item\.key/.test(src), '勾选读屏标签不说 item.key')
 
+// 人格页顶部必须一眼看到「哪几段真进每回合上下文、L2 不进」（OW m08444）
+const personaBudgetAnchor = "每回合注入 L0 ' + p0Chars + ' + L1 ' + p1Chars"
+assert.ok(src.includes(personaBudgetAnchor), '人格页要给出每回合注入的字数分配')
+assert.ok(
+  src.indexOf(personaBudgetAnchor) < src.indexOf("personaField('l0'"),
+  '这条分配要排在 L0 字段之前，别藏在 L1 下面',
+)
+assert.ok(src.includes('字不进注入。'), '要写明 L2 不进注入')
+assert.ok(!src.includes("'L0 ' + p0Chars + ' + L1 '"), '旧的半截读数要收掉，避免两处重复')
+
 // 预设文案漂移：只对「旧版默认」给一键换新；自己改过的只提示，绝不给替换入口
 assert.match(src, /item\.kind === 'superseded'/, '旧版默认要按 kind 判定，别用 edited 猜')
 assert.ok(!src.includes('item.edited'), 'edited 分不清旧默认和自己改过，界面改用 kind')
