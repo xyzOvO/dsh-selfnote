@@ -11,7 +11,7 @@
 
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.16.6-4f46e5" alt="version">
+  <img src="https://img.shields.io/badge/version-0.16.7-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
   <img src="https://img.shields.io/badge/tests-52%20files-0ea5e9" alt="tests">
@@ -707,3 +707,6 @@ lib/client.js       设置页 UI
 ## License
 
 MIT © [xyzOvO](https://github.com/xyzOvO)
+
+**交接卡**：设置页填一次项目路径；新项目点「初始化交接卡」铺骨架；之后「导出交接卡」把整份打成一份 markdown，换个 AI 或换台机器粘回去就接着干。
+

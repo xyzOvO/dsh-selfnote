@@ -69,6 +69,11 @@ assert.match(src, /id: 'sn-handover-root'/, '要有项目路径输入框，否�
 assert.match(src, /handoverSaveRoot/, '要能保存项目路径')
 assert.match(src, /apiPost\('\/config', \{ handoverRoot: value \}\)/, '保存路径走 /config 的 handoverRoot')
 
+assert.match(src, /handoverInit/, '要有初始化处理函数，新项目才有起点')
+assert.match(src, /初始化交接卡/, '卡片上要有「初始化交接卡」按钮')
+assert.match(src, /\/handover\/init/, '初始化要打 /handover/init')
+assert.match(src, /先在上面填项目根路径，再点初始化/, '没填路径时要说清怎么补')
+
 // 护栏必须进默认测试，否则形同虚设（batch5-reviewer 复审 Important）
 assert.ok(
   String(pkg.scripts.test).includes('node tests/ux-regressions.mjs'),
