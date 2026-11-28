@@ -134,7 +134,9 @@ for (const preset of shown) {
 store.appendNote('回答短一点，一屏就够', {}, { tier: 'stable', key: 'style.length' })
 const overridden = boot()
 assert.ok(overridden.includes('回答短一点，一屏就够'), '用户那句照旧进注入')
-assert.equal(overridden.includes('回答长度不限，该多长就多长；结论先给，不铺垫。'), false, '预设那条要让位')
+const styleDefault = presets.findPreset('style.length').text
+assert.ok(styleDefault.includes('先一句介绍'), '预设默认要跟「先介绍、再结论」的口径一致：' + styleDefault)
+assert.equal(overridden.includes(styleDefault), false, '预设那条要让位')
 console.log('6. 注入段：空态给提示、导入后带来源标记、装不下整条跳过')
 
 /* ---------------- 7. 移除：只删 preset，不碰 notes.md ---------------- */
