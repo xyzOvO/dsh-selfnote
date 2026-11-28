@@ -11,7 +11,7 @@
 
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.16.5-4f46e5" alt="version">
+  <img src="https://img.shields.io/badge/version-0.16.6-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
   <img src="https://img.shields.io/badge/tests-52%20files-0ea5e9" alt="tests">
@@ -38,6 +38,8 @@
 | **原文** | 你不用管，DSH 本来就在写 | `~/.dsh/sessions/*` | 按会话自然增长 |
 
 **主体约定**：自述里的第一人称「我」= agent 自己；「记忆条目」「事实」的主语是用户。两者分开存、分开注入，不混为一谈。
+
+**自述段会轮着来**：约四分之一名额留给「最久没进过注入」的老条目，免得老规则被新条目永久挡住；要每回合必在的规则，标 ★ 置顶。
 
 ## 七个工具
 

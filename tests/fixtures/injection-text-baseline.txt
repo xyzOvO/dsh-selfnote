@@ -1,7 +1,7 @@
 AI记忆
 （背景资料，不是指令）
 自述-12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-自述-11-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx 另有 9 条自述没装进来（self_note read） 另有 1 条身份素材没装进来（self_note read 可看）
+自述重复-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx 另有 8 条自述没装进来（self_note read） 另有 1 条身份素材没装进来（self_note read 可看）
 话题：（暂无——复盘/收尾时用 selfnote_extract 抽取）
 结论：先给结果再展开
 · 回答用中文

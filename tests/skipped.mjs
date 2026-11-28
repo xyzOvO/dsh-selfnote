@@ -39,7 +39,12 @@ console.log('2. 9 段全带 skippedDetail，reason 都在封闭枚举内')
 const notesSeg = st.injection.segments.find((s) => s.key === 'notes')
 assert.equal(notesSeg.skippedDetail.length, notesSeg.skipped.length + 1, 'skipped 每条 + core 每条，各恰好一条解释')
 assert.equal(notesSeg.skippedDetail.length, 12 - notesSeg.kept.length, '12 条自述闭合：进来的 + 被跳过的 + core')
-assert.ok(notesSeg.skippedDetail.some((d) => d.preview === CROSS_TEXT && d.reason === 'budget'), '稳定条同文不许被误标 expired')
+// 轮换后「同文里稳定那条」可能被公平预留选进注入 —— 两种结果都合法，但绝不可能是 expired
+const crossKept = notesSeg.kept.includes(CROSS_TEXT)
+assert.ok(crossKept || notesSeg.skippedDetail.some((d) => d.preview === CROSS_TEXT && d.reason === 'budget'),
+  '稳定条同文不许被误标 expired（要么进了注入，要么按 budget 记）')
+assert.equal(notesSeg.skippedDetail.filter((d) => d.preview === CROSS_TEXT && d.reason === 'expired').length, 1,
+  '同文里只有过期那条算 expired，稳定那条不许跟着算')
 assert.ok(notesSeg.skippedDetail.some((d) => d.preview === CROSS_TEXT && d.reason === 'expired'), '过期条同文不许被误标 budget')
 assert.equal(notesSeg.skippedDetail.filter((d) => d.reason === 'expired').length, 3, '3 条过期（含重复文本）一条都不能少')
 assert.equal(notesSeg.skippedDetail[notesSeg.skipped.length].preview, '素材层，不注入')
