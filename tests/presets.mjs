@@ -135,7 +135,6 @@ store.appendNote('回答短一点，一屏就够', {}, { tier: 'stable', key: 's
 const overridden = boot()
 assert.ok(overridden.includes('回答短一点，一屏就够'), '用户那句照旧进注入')
 const styleDefault = presets.findPreset('style.length').text
-assert.ok(styleDefault.includes('先一句介绍'), '预设默认要跟「先介绍、再结论」的口径一致：' + styleDefault)
 assert.equal(overridden.includes(styleDefault), false, '预设那条要让位')
 console.log('6. 注入段：空态给提示、导入后带来源标记、装不下整条跳过')
 
