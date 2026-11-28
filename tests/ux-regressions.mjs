@@ -65,6 +65,9 @@ assert.match(src, /apiGet\('\/handover\/export'\)/, '导出要打 /handover/expo
 assert.match(src, /apiPost\('\/handover\/import'/, '导入要打 /handover/import')
 assert.match(src, /覆盖前会把原目录整份备份/, '卡片要说明导入会先备份')
 assert.match(src, /整份复制给别的 AI/, '导出成功要说明可以直接复制给别的 AI')
+assert.match(src, /id: 'sn-handover-root'/, '要有项目路径输入框，否则按钮在桌面端找不到项目')
+assert.match(src, /handoverSaveRoot/, '要能保存项目路径')
+assert.match(src, /apiPost\('\/config', \{ handoverRoot: value \}\)/, '保存路径走 /config 的 handoverRoot')
 
 // 护栏必须进默认测试，否则形同虚设（batch5-reviewer 复审 Important）
 assert.ok(
