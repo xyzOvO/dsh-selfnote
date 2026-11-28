@@ -56,6 +56,16 @@ assert.match(src, /'用新的默认'/, '旧版默认那条要给「用新的默�
 assert.match(src, /runPresetOp\('sync'/, '换新走 sync，不是重新导入')
 assert.match(src, /这条你自己改过，和当前默认不一样/, '自己改过的要如实说明不会被悄悄改掉')
 
+// 交接卡导入导出：设置页要有这一张卡，两个按钮 + 一个可粘贴的框
+assert.match(src, /key: 'handover'/, '设置页要有「项目交接卡」这张卡')
+assert.match(src, /handoverExport/, '要有导出处理函数')
+assert.match(src, /handoverImport/, '要有导入处理函数')
+assert.match(src, /id: 'sn-handover-box'/, '导出/导入共用同一个文本框 id')
+assert.match(src, /apiGet\('\/handover\/export'\)/, '导出要打 /handover/export')
+assert.match(src, /apiPost\('\/handover\/import'/, '导入要打 /handover/import')
+assert.match(src, /覆盖前会把原目录整份备份/, '卡片要说明导入会先备份')
+assert.match(src, /整份复制给别的 AI/, '导出成功要说明可以直接复制给别的 AI')
+
 // 护栏必须进默认测试，否则形同虚设（batch5-reviewer 复审 Important）
 assert.ok(
   String(pkg.scripts.test).includes('node tests/ux-regressions.mjs'),
