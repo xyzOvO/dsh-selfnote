@@ -39,6 +39,13 @@ assert.ok(!/来源标着 preset/.test(src), '用户可见文案不说「来源�
 assert.ok(!/同 key/.test(src), '用户可见文案不说「同 key」')
 assert.ok(!/aria-label': '勾选 ' \+ item\.key/.test(src), '勾选读屏标签不说 item.key')
 
+// 预设文案漂移：只对「旧版默认」给一键换新；自己改过的只提示，绝不给替换入口
+assert.match(src, /item\.kind === 'superseded'/, '旧版默认要按 kind 判定，别用 edited 猜')
+assert.ok(!src.includes('item.edited'), 'edited 分不清旧默认和自己改过，界面改用 kind')
+assert.match(src, /'用新的默认'/, '旧版默认那条要给「用新的默认」按钮')
+assert.match(src, /runPresetOp\('sync'/, '换新走 sync，不是重新导入')
+assert.match(src, /这条你自己改过，和当前默认不一样/, '自己改过的要如实说明不会被悄悄改掉')
+
 // 护栏必须进默认测试，否则形同虚设（batch5-reviewer 复审 Important）
 assert.ok(
   String(pkg.scripts.test).includes('node tests/ux-regressions.mjs'),
@@ -48,6 +55,7 @@ assert.ok(
 for (const t of [
   'atomic-dir-fsync', 'atomic-tmp-exclusive', 'atomic-wx-cleanup',
   'habit-lock', 'import-lock-read-guard', 'lock-created-cleanup', 'lock-pid',
+  'preset-drift',
 ]) {
   assert.ok(
     String(pkg.scripts.test).includes('node tests/' + t + '.mjs'),

@@ -863,7 +863,7 @@ for (const group of doctorDoc.groups) {
 // 每一项都必须归进其中一组：漏推 group 的检查会在界面上凭空消失
 assert.equal(doctorDoc.checks.every((check) => GROUP_KEYS.includes(check.group)), true, '有检查项没归组')
 // 固定项一个不许少，也不许悄悄长出去
-const BASE = ['plugin', 'auth', 'beat', 'facts', 'habits', 'notes', 'corrections', 'capture', 'inject', 'segments', 'persona', 'persona-tx', 'index', 'relation']
+const BASE = ['plugin', 'auth', 'beat', 'facts', 'habits', 'notes', 'corrections', 'capture', 'inject', 'segments', 'preset', 'persona', 'persona-tx', 'index', 'relation']
 for (const key of BASE) assert.ok(keys.includes(key), '体检少了 ' + key + '：' + keys.join(','))
 assert.ok(keys.length === BASE.length || keys.length === BASE.length + 1, '体检项数不对：' + keys.join(','))
 if (keys.length === BASE.length + 1) assert.ok(keys.includes('index-failed'), '多出来的只能是 index-failed')
