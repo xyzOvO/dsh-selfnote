@@ -43,5 +43,13 @@ assert.deepEqual(offenders, [], '这些地方别手写发行版本号，改成 i
 const { VERSION } = await import('../lib/index.js')
 assert.equal(VERSION, pkg.version, 'VERSION 必须等于 package.json 的 version')
 
+/* 5. README tests 徽章的文件数要和 package.json test 链一致（审查 F1：徽章 52 / 实际 58 各写各的） */
+const testFileCount = (pkg.scripts.test.match(/node tests\//g) || []).length
+const testBadges = [...readme.matchAll(/badge\/tests-(\d+)%20files-/g)].map((m) => Number(m[1]))
+assert.ok(testBadges.length > 0, 'README 里应该有 tests 徽章')
+for (const n of testBadges) {
+  assert.equal(n, testFileCount, `README tests 徽章写 ${n} files，package.json test 链实际有 ${testFileCount} 个测试文件`)
+}
+
 console.log(`版本号一致性：package.json / README 徽章 / VERSION 三处都是 ${pkg.version}`)
 console.log(`（根目录 ${root}）`)
