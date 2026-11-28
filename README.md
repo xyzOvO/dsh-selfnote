@@ -11,7 +11,7 @@
 
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.16.9-4f46e5" alt="version">
+  <img src="https://img.shields.io/badge/version-0.16.10-4f46e5" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-16a34a" alt="license">
   <img src="https://img.shields.io/badge/node-%3E%3D20.13-339933" alt="node">
   <img src="https://img.shields.io/badge/tests-59%20files-0ea5e9" alt="tests">
@@ -113,6 +113,10 @@ plugin_manager { action: "install_bundle", target: "<该目录的绝对路径>" 
 > 你写一条自述，说说你做这类插件时的习惯。
 
 模型会调用 `self_note`，写进 `notes.md`，以后每个会话都带着。
+
+**换 AI、换会话、换机器接着干：交接卡**
+
+项目聊到一半要换 AI 接手、或明天换个会话继续？设置 → AI 记忆里有一张「项目交接卡」，三步就能接上：① 填一次项目根路径 → ② 新项目点「初始化交接卡」铺好骨架（只做一次）→ ③ 以后点「导出交接卡」，把整份内容粘给另一个 AI，它一进来就知道进度、待办和硬边界，接着往下干。
 
 ### 左侧栏：记忆确认页
 

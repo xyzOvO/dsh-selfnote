@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const src = readFileSync(fileURLToPath(new URL('../lib/client.js', import.meta.url)), 'utf8')
+const readme = readFileSync(fileURLToPath(new URL('../README.md', import.meta.url)), 'utf8')
 const pkg = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'))
 
 assert.match(src, /className: 'sn-intro',\s*open: true/, '新用户引导 intro 要默认展开')
@@ -73,6 +74,18 @@ assert.match(src, /handoverInit/, '要有初始化处理函数，新项目才有
 assert.match(src, /初始化交接卡/, '卡片上要有「初始化交接卡」按钮')
 assert.match(src, /\/handover\/init/, '初始化要打 /handover/init')
 assert.match(src, /先在上面填项目根路径，再点初始化/, '没填路径时要说清怎么补')
+
+// 小白可用性（OW 拍板）：README 上手节要讲交接卡；卡片头白话说明；初始化按钮提前且为主按钮
+const quickStart = readme.slice(readme.indexOf('## 五分钟上手'), readme.indexOf('## 记忆怎么流动'))
+assert.match(quickStart, /交接卡/, 'README 五分钟上手节要提到交接卡，不能只埋在文末')
+assert.match(quickStart, /初始化/, 'README 五分钟上手节要讲「初始化交接卡」这一步')
+assert.match(src, /sn-card-note[^)]*初始化/, '交接卡卡片头要用白话说明「先初始化」，不是抽象的一句')
+assert.ok(
+  src.indexOf('onClick: handoverInit') < src.indexOf('onClick: handoverExport'),
+  '初始化按钮要排在导出之前——小白第一眼该点的是初始化，不是必然失败的导出',
+)
+assert.match(src, /sn-btn-primary/, '要有主按钮样式，初始化交接卡用它突出')
+assert.match(src, /onClick: handoverInit[^\n]*sn-btn-primary|sn-btn-primary[^\n]*onClick: handoverInit/, '初始化按钮要用主按钮样式')
 
 // 护栏必须进默认测试，否则形同虚设（batch5-reviewer 复审 Important）
 assert.ok(
